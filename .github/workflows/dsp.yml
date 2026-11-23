@@ -79,7 +79,9 @@ jobs:
           printf '%s\n' intono_create intono_destroy intono_drone_render intono_drone_set intono_process \
             intono_read_frames intono_read_notes intono_set_tonic | sort > expected.txt
           diff expected.txt exported.txt
-          if "$BIN/llvm-readelf" -d "$SO" | grep -q 'libc++_shared'; then echo "links libc++_shared.so"; exit 1; fi
+          # The standalone libintono.so keeps the static STL. The app's libintono_android.so uses the shared STL because Oboe's Prefab
+          # package requires it (ADR 0009 Amendment 1); that is checked in android-app.yml, which requires libc++_shared.so there.
+          if "$BIN/llvm-readelf" -d "$SO" | grep -q 'libc++_shared'; then echo "standalone libintono.so links libc++_shared.so"; exit 1; fi
           "$BIN/llvm-readelf" -lW "$SO" | awk '$1=="LOAD"{print $NF}' | while read a; do
             [ $((a)) -ge 16384 ] || { echo "LOAD segment aligned to $a, need 0x4000"; exit 1; }
           done

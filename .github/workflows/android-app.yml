@@ -1,6 +1,6 @@
 name: android-app
-# ADR 0009. Host tests for the Android audio shim (AudioPump). The Gradle app job and the Flutter job are added by the PRs that
-# introduce them. Pinned runner labels only.
+# ADR 0009. Host tests for the Android audio shim (AudioPump), the Gradle app (Oboe, JNI, Kotlin) and its emulator smoke test. The
+# Flutter job is added by the PR that introduces it. Pinned runner labels and tool versions only; no third-party actions.
 on:
   workflow_dispatch:
   push:
@@ -21,3 +21,94 @@ jobs:
       - run: cmake -S android/shim -B build -G Ninja -DINTONO_SANITIZE=${{ matrix.sanitizer }}
       - run: cmake --build build
       - run: ctest --test-dir build --output-on-failure   # sanitizer=none also runs the real-time safety test
+
+  android-app:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain (pinned)
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          echo "SDK=$SDK" >> "$GITHUB_ENV"
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" "ndk;30.0.16248370"
+      - name: Gradle wrapper 8.14.3 (generated, not committed)
+        run: |
+          d=$(mktemp -d)
+          (cd "$d" && echo 'rootProject.name="w"' > settings.gradle.kts && gradle wrapper --gradle-version 8.14.3 --distribution-type bin)
+          cp -r "$d/gradle" "$d/gradlew" android/
+      - name: Kotlin unit tests and debug APK
+        working-directory: android
+        run: ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest :app:assembleDebug
+      - name: Check the APK
+        run: |
+          APK=android/app/build/outputs/apk/debug/app-debug.apk
+          ls -l "$APK"
+          BIN="$SDK/ndk/30.0.16248370/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          mkdir -p apk && cd apk && unzip -q -o "../$APK"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            for lib in libintono_android.so liboboe.so libc++_shared.so; do test -f "lib/$abi/$lib" || { echo "missing lib/$abi/$lib"; exit 1; }; done
+            SO="lib/$abi/libintono_android.so"
+            # ADR 0009 Amendment 1: the shim uses the shared STL, so it must depend on libc++_shared.so and the APK must carry it.
+            "$BIN/llvm-readelf" -d "$SO" | grep -q 'Shared library: \[libc++_shared.so\]' || { echo "$abi: libintono_android.so does not need libc++_shared.so"; exit 1; }
+            unzip -l "../$APK" | grep -q "lib/$abi/libc++_shared.so" || { echo "$abi: libc++_shared.so is not packaged in the APK"; exit 1; }
+            "$BIN/llvm-nm" -D --defined-only "$SO" | awk '$2=="T"{print $3}' | sort > "exported-$abi.txt"
+            cat "exported-$abi.txt"
+            for sym in intono_create intono_destroy intono_drone_render intono_drone_set intono_process intono_read_frames intono_read_notes \
+                       intono_set_tonic Java_com_example_intono_NativeAudio_nativeStart Java_com_example_intono_NativeAudio_nativeSmoke; do
+              grep -qx "$sym" "exported-$abi.txt" || { echo "$abi: $sym is not exported"; exit 1; }
+            done
+            grep -vE '^(intono_|Java_com_example_intono_)' "exported-$abi.txt" && { echo "$abi: unexpected exports above"; exit 1; } || true
+            "$BIN/llvm-readelf" -lW "$SO" | awk '$1=="LOAD"{print $NF}' | while read a; do
+              [ $((a)) -ge 16384 ] || { echo "$abi: LOAD segment aligned to $a, need 0x4000"; exit 1; }
+            done
+            for lib in liboboe.so libc++_shared.so; do   # information: Play needs 16 KB alignment for every library in the APK
+              "$BIN/llvm-readelf" -lW "lib/$abi/$lib" | awk -v n="$abi/$lib" '$1=="LOAD"{print n, $NF}' | sort -u
+            done
+          done
+      - uses: actions/upload-artifact@v4
+        with: { name: intono-harness-debug-apk, path: android/app/build/outputs/apk/debug/app-debug.apk }
+
+  # The CI emulator has no audio device (-no-audio): this proves library load, JNI and the engine on bionic, not capture.
+  android-app-emulator:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain (pinned)
+        run: |
+          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          echo "SDK=$SDK" >> "$GITHUB_ENV"
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.0" "cmake;3.22.1" "ndk;30.0.16248370" \
+            "platform-tools" "emulator" "system-images;android-34;google_apis;x86_64"
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm
+      - run: sudo apt-get update && sudo apt-get install -y libpulse0 libnss3 libxcb-cursor0
+      - name: Gradle wrapper 8.14.3 (generated, not committed)
+        run: |
+          d=$(mktemp -d)
+          (cd "$d" && echo 'rootProject.name="w"' > settings.gradle.kts && gradle wrapper --gradle-version 8.14.3 --distribution-type bin)
+          cp -r "$d/gradle" "$d/gradlew" android/
+      - name: Boot the emulator and run the instrumented smoke test
+        run: |
+          export PATH="$SDK/platform-tools:$SDK/emulator:$SDK/cmdline-tools/latest/bin:$PATH"
+          export ANDROID_AVD_HOME="$HOME/.android/avd"; mkdir -p "$ANDROID_AVD_HOME"
+          printf 'no\n' | avdmanager create avd -n ci -k "system-images;android-34;google_apis;x86_64" -d pixel_5 --force
+          nohup emulator -avd ci -no-window -no-audio -no-boot-anim -no-snapshot -no-metrics -gpu swiftshader_indirect -accel on > emulator.log 2>&1 &
+          EMU=$!
+          for i in $(seq 1 120); do
+            kill -0 $EMU 2>/dev/null || { echo "emulator process exited early"; cat emulator.log; exit 1; }
+            [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ] && break
+            sleep 5
+          done
+          [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ] || { echo "emulator did not boot"; cat emulator.log; exit 1; }
+          cd android && ./gradlew --no-daemon --stacktrace :app:connectedDebugAndroidTest
+          adb emu kill || true
