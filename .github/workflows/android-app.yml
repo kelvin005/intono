@@ -51,6 +51,9 @@ jobs:
           for abi in arm64-v8a armeabi-v7a x86_64; do
             for lib in libintono_android.so liboboe.so libc++_shared.so; do test -f "lib/$abi/$lib" || { echo "missing lib/$abi/$lib"; exit 1; }; done
             SO="lib/$abi/libintono_android.so"
+            # ADR 0009 Amendment 1: the shim uses the shared STL, so it must depend on libc++_shared.so and the APK must carry it.
+            "$BIN/llvm-readelf" -d "$SO" | grep -q 'Shared library: \[libc++_shared.so\]' || { echo "$abi: libintono_android.so does not need libc++_shared.so"; exit 1; }
+            unzip -l "../$APK" | grep -q "lib/$abi/libc++_shared.so" || { echo "$abi: libc++_shared.so is not packaged in the APK"; exit 1; }
             "$BIN/llvm-nm" -D --defined-only "$SO" | awk '$2=="T"{print $3}' | sort > "exported-$abi.txt"
             cat "exported-$abi.txt"
             for sym in intono_create intono_destroy intono_drone_render intono_drone_set intono_process intono_read_frames intono_read_notes \
