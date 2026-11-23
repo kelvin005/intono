@@ -28,3 +28,13 @@ If B proves too flaky to keep green (more than one unexplained boot failure in t
 - About 8 to 12 CI minutes per run, plus a system-image download of roughly 1 GB (cacheable).
 - arm64 and real devices are not covered. Real-device latency and the audio path belong to Phase 2.
 - This ADR changes nothing in the C API or the product.
+
+## Implementation status (2026-11-23)
+
+Option B is implemented as the `android-test` job in `.github/workflows/dsp.yml`: NDK-built `intono_tests` for x86_64, API 34 `google_apis` x86_64 system image, KVM enabled on the `ubuntu-24.04` runner, no third-party action. The suite runs inline and with `INTONO_TEST_THREADED=1`; both pass (80 tests each) on the emulator. `intono_rt_safety` is not built for Android (it wraps glibc symbols). The job takes about 8 minutes. arm64 is built but not executed in CI; real ARM measurements belong to Phase 2.
+
+macOS jobs are pinned to `macos-15` (Apple Silicon). `macos-14` is not available to this account. `macos-latest` is not used, so runner upgrades are deliberate.
+
+## Process rule
+
+All changes go through a branch and a pull request. `main` changes only by merging a PR whose CI is fully green.

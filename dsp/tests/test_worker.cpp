@@ -22,18 +22,19 @@ intono_config cfg() {
   return c;
 }
 
-int thread_count() {   // Linux: one entry per thread in /proc/self/task
+int thread_count() {   // Linux and Android: one entry per thread in /proc/self/task; -1 where there is no /proc (macOS)
+  DIR* d = opendir("/proc/self/task");
+  if (!d) return -1;
   int n = 0;
-  if (DIR* d = opendir("/proc/self/task")) {
-    while (dirent* e = readdir(d)) if (e->d_name[0] != '.') ++n;
-    closedir(d);
-  }
+  while (dirent* e = readdir(d)) if (e->d_name[0] != '.') ++n;
+  closedir(d);
   return n;
 }
 
 // /proc/self/task can list a joined thread for a moment while the kernel reaps it: wait up to 2 s for the count to settle at `want`.
 int settled_thread_count(int want) {
   int n = thread_count();
+  if (n < 0) return want;   // no /proc: the thread accounting cannot be checked here
   for (int i = 0; i < 400 && n != want; ++i) {
     std::this_thread::sleep_for(std::chrono::milliseconds(5));
     n = thread_count();
