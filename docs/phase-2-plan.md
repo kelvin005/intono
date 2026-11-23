@@ -19,3 +19,14 @@ Phase 2 now depends **only on CI being green** (ADR 0005: Linux build and tests,
 ## Decision: the software denormal guard stays (Kelechi, 2026-11-23 14:26)
 
 The software flush in `filters.hpp` and `engine.cpp` (ADR 0008 Amendment 1) **stays on every platform, even if the phone's FPU flushes denormals to zero in hardware** (ARM FPCR.FZ, the NEON default on 32-bit ARM, or a flush-to-zero mode the audio stack sets). Reason: portability and determinism. The guard makes results independent of the platform's floating-point mode and bit-comparable between the desktop, the emulator and the phone. Do not remove it, and do not replace it by setting MXCSR or FPCR. The phone measurement (item 1) is taken with the guard on; it may additionally be taken with it compiled out, as information only.
+
+## Plan (2026-11-23, Kelechi's four items; architecture in ADR 0009)
+
+Android first, iOS after. Tests first; an ADR for anything new; PRs only when CI is green; self-merge only under the rule in `CLAUDE.md`.
+
+1. Oboe audio shim (Kotlin glue and JNI, linking libintono): unprocessed input preset, low-latency exclusive mode with fallback, drone output path.
+2. Flutter skeleton with `dart:ffi` bindings from ffigen and ring-buffer polling on vsync.
+3. Minimal live-meter screen: note, cents, needle.
+4. On-device bench mode: worst hop, latency, xruns, with and without the denormal guard.
+
+Sequence and open questions: ADR 0009. The measurements listed above (worst hop, polling power, worker latency and queue depth) are taken with the bench mode on the real phone.

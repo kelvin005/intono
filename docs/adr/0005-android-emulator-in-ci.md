@@ -37,4 +37,4 @@ macOS jobs are pinned to `macos-15` (Apple Silicon). `macos-14` is not available
 
 ## Process rule
 
-All changes go through a branch and a pull request. `main` changes only by merging a PR whose CI is fully green.
+All changes go through a branch and a pull request, and `main` changes only by merging a PR; nothing is pushed to `main` directly. Rule for who may merge (Kelechi, 2026-11-23, permanent; also in `CLAUDE.md`): Claude may merge its own PR when CI is fully green on the PR **and** the PR changes no ADR decision, no public C API (`intono.h`), no gate or threshold, and no architecture-doc decision. Any PR touching those needs Kelechi's explicit "merge" first. Milestones are tagged when a phase gate passes (`phase1-complete` marks Phase 1).
