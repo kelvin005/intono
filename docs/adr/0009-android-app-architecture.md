@@ -80,10 +80,21 @@ CI uploads the debug APK as an artifact. Kelechi downloads it from the GitHub Ac
 
 ## Answers (Kelechi, 2026-11-23)
 
-1. **Test phone:** not yet stated (the reply carried an unfilled `[MODEL]` / `[VERSION]` template). Needed before the phone measurements (PR 6), not before the code PRs. Open.
+1. **Test phone (Kelechi, 2026-11-23):** Infinix Note 30, Android 14, mid-range MediaTek; the SoC is confirmed with `adb shell getprop ro.soc.model` in PR 6. A true low-end 2 GB device will be added before Phase 5, so the mid-range numbers are not the low-end numbers and ADR 0008's "low-end phone" measurement stays open until that device exists.
 2. **Drone and headphones:** see the drone policy in decision 4 (default off unless headphones; speaker use allowed with a warning; notch filtering in Phase 3).
 3. **App id:** the placeholder `com.example.intono` and a sideloaded debug APK are fine for Phase 2; the final app id is decided before Phase 5.
 4. **Denormal-guard comparison option:** approved. `INTONO_DENORMAL_GUARD` (CMake option, default ON) is added in PR 5 **on the condition that CI proves the default build's output is bit-identical to `phase1-complete`**. The proof: a CI job builds the `phase1-complete` tag and the PR head with the default option and compares the output of `intono-cli` byte for byte (`tools/accuracy/diff_cli.py`) on the synthetic dev corpus (steady tones, scales, vibrato, noisy clips, silence-padded runs, inline and threaded); any difference fails the PR. The comparison library (guard off) ships only in the bench APK.
+
+## Amendment 1 (2026-11-23, with PR 2): what the implementation fixed
+
+Implementation details found while building PR 2. Decision 2's `c++_static` is the only change of substance.
+
+- **Shared STL.** Oboe's Prefab package ships only `libc++_shared` builds, so `libintono_android.so` is built with `-DANDROID_STL=c++_shared` and the APK carries `libc++_shared.so`. This replaces `c++_static` in decision 2 for the Android app; the Phase 1 `libintono.so` job (static STL, no `libc++_shared`) is unchanged. Alternative not taken: building Oboe from source with the static STL (a second pinned source tree).
+- **One Gradle module.** `android/app` is a single application module (`com.example.intono`) with the shim's CMake as its `externalNativeBuild`; a library module is split out only if the Flutter integration (PR 3) needs it.
+- **Pins:** Gradle 8.14.3 (wrapper generated in CI, not committed), Android Gradle plugin 8.13.0, Kotlin 2.2.20, JDK 17, compileSdk and targetSdk 35, minSdk 24, build-tools 35.0.0, CMake 3.22.1, NDK 30.0.16248370, Oboe 1.9.3 (resolved from Google Maven in CI), JUnit 4.13.2, androidx.test runner 1.6.2 and ext-junit 1.2.1 (test only; `android.useAndroidX=true`).
+- **Exports.** `libintono_android.so` exports exactly the eight `intono_*` functions and the JNI entry points (version script), is 16 KB aligned on all three ABIs, and CI fails otherwise. `liboboe.so` and `libc++_shared.so` are 16 KB aligned on the 64-bit ABIs; armeabi-v7a copies are 4 KB, which Play's 16 KB rule does not cover (64-bit only).
+- **Streams.** Input: Oboe, `LowLatency`, `Exclusive` requested (the granted mode is reported by `info()`), float, mono, `InputPreset::Unprocessed`, native sample rate; the engine is created with the stream's rate. Output (drone): opened only while the drone plays, same rate, `LowLatency`, `Exclusive` requested, buffer 2 bursts.
+- **CI.** `android-app` builds and unit-tests, then checks the APK; `android-app-emulator` runs an instrumented smoke test (library load, JNI, engine create/process/read/destroy on bionic). Capture itself is not testable on the CI emulator (`-no-audio`) and is first exercised on the phone.
 
 ## Consequences
 
