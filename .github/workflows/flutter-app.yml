@@ -91,3 +91,9 @@ jobs:
           done
       - uses: actions/upload-artifact@v4
         with: { name: intono-flutter-debug-apk, path: app/build/app/outputs/flutter-apk/app-debug.apk }
+      - name: Build the profile APK (arm64 only)
+        # The debug APK runs Dart in JIT and loads the audio thread's CPU with UI work; timing on the phone is judged on this AOT build.
+        working-directory: app
+        run: flutter build apk --profile --target-platform android-arm64
+      - uses: actions/upload-artifact@v4
+        with: { name: intono-flutter-profile-apk, path: app/build/app/outputs/flutter-apk/app-profile.apk }
