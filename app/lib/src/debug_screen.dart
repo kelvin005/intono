@@ -37,6 +37,7 @@ class _DebugScreenState extends State<DebugScreen> with TickerProviderStateMixin
   final ValueNotifier<MeterState> _meter = ValueNotifier<MeterState>(MeterState.silent);
   final JankLog _jank = JankLog();
   Timer? _refresh;
+  bool _timingsAttached = false;
 
   @override
   void initState() {
@@ -80,7 +81,10 @@ class _DebugScreenState extends State<DebugScreen> with TickerProviderStateMixin
   void _stopRefresh() {
     _refresh?.cancel();
     _refresh = null;
-    SchedulerBinding.instance.removeTimingsCallback(_onTimings);
+    if (_timingsAttached) {
+      SchedulerBinding.instance.removeTimingsCallback(_onTimings);
+      _timingsAttached = false;
+    }
   }
 
   void _teardownPolling() {
@@ -117,6 +121,7 @@ class _DebugScreenState extends State<DebugScreen> with TickerProviderStateMixin
     _controller!.start();
     _jank.clear();
     SchedulerBinding.instance.addTimingsCallback(_onTimings);
+    _timingsAttached = true;
     _headphones = headphones;
     final drone = DronePolicy.decide(_userDrone, _headphones);
     if (drone.play) await widget.audio.setDrone(true);
