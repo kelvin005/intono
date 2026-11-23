@@ -51,3 +51,36 @@ TEST(Filters, DcBlockerRemovesOffsetAndKeepsAudioBand) {
   }
   EXPECT_NEAR(peak, 1.0, 0.02);
 }
+
+// ---- INTONO_DENORMAL_GUARD (ADR 0009 answer 4): a build option, default ON; OFF exists only for the on-device comparison in bench mode.
+#include <cstdlib>
+
+static_assert(INTONO_DENORMAL_GUARD == 0 || INTONO_DENORMAL_GUARD == 1, "INTONO_DENORMAL_GUARD must be defined as 0 or 1 for the library and its tests");
+
+TEST(DenormalGuard, TheDefaultBuildHasTheGuardOn) {
+  const char* e = std::getenv("INTONO_EXPECT_GUARD");   // the guard-off CI job sets 0
+  const int expected = e ? std::atoi(e) : 1;
+  EXPECT_EQ(INTONO_DENORMAL_GUARD, expected);
+}
+
+TEST(DenormalGuard, FlushBehavesAsTheOptionSays) {
+  const double tiny = 1e-31, big = 3e-30;
+  const float ftiny = 1e-19f, fbig = 3e-18f;
+#if INTONO_DENORMAL_GUARD
+  EXPECT_EQ(flush_state(tiny), 0.0);
+  EXPECT_EQ(flush_state(-tiny), 0.0);
+  EXPECT_EQ(flush_sample(ftiny), 0.f);
+  EXPECT_EQ(flush_sample(-ftiny), 0.f);
+#else
+  EXPECT_EQ(flush_state(tiny), tiny);
+  EXPECT_EQ(flush_state(-tiny), -tiny);
+  EXPECT_EQ(flush_sample(ftiny), ftiny);
+  EXPECT_EQ(flush_sample(-ftiny), -ftiny);
+#endif
+  // Above the thresholds the guard never touches a value, so the default build's arithmetic is the unguarded arithmetic there.
+  EXPECT_EQ(flush_state(big), big);
+  EXPECT_EQ(flush_state(-big), -big);
+  EXPECT_EQ(flush_sample(fbig), fbig);
+  EXPECT_EQ(flush_sample(-fbig), -fbig);
+  EXPECT_EQ(flush_state(0.0), 0.0);
+}
