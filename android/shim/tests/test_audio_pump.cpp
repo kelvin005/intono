@@ -272,7 +272,7 @@ TEST(AudioPumpEngine, TheRealEngineSeesExactlyTheSamplesTheMicrophoneDelivered) 
     EXPECT_EQ(fa[i].is_voiced, fb[i].is_voiced);
     EXPECT_EQ(fa[i].is_onset, fb[i].is_onset);
   }
-  EXPECT_EQ(p.snapshot().chunk.count, 96000u / 256u + 1);   // 375 full hops, the callbacks are not hop aligned so there are extra short chunks
+  EXPECT_EQ(p.snapshot().chunk.count, 400u);   // 200 callbacks of 480 frames, each split into 256 + 224
   intono_destroy(a);
   intono_destroy(b);
 }

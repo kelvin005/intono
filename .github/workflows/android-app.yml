@@ -1,0 +1,23 @@
+name: android-app
+# ADR 0009. Host tests for the Android audio shim (AudioPump). The Gradle app job and the Flutter job are added by the PRs that
+# introduce them. Pinned runner labels only.
+on:
+  workflow_dispatch:
+  push:
+    paths: ["android/**", ".github/workflows/android-app.yml"]
+  pull_request:
+    paths: ["android/**", ".github/workflows/android-app.yml"]
+
+jobs:
+  shim-host-tests:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [none, address, thread]
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build cmake
+      - run: cmake -S android/shim -B build -G Ninja -DINTONO_SANITIZE=${{ matrix.sanitizer }}
+      - run: cmake --build build
+      - run: ctest --test-dir build --output-on-failure   # sanitizer=none also runs the real-time safety test

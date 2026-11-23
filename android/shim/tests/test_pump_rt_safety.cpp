@@ -79,3 +79,8 @@ TEST(PumpRtSafety, InputAndOutputCallbacksNeitherAllocateNorLock) {
   EXPECT_EQ(g_locks.load(), 0);
   intono_destroy(e);
 }
+
+int main(int argc, char** argv) {
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}
