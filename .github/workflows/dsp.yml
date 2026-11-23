@@ -36,11 +36,7 @@ jobs:
   # Real arm64 silicon (Apple M-series): runs the whole unit-test suite with the NEON pffft path and the ARM memory
   # model. The real-time safety test is Linux-only (link-time malloc wrapping) and is skipped by CMake here.
   test-macos-arm64:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-14, macos-15]   # pinned Apple Silicon labels, never macos-latest: upgrades are deliberate
+    runs-on: macos-15   # pinned Apple Silicon label, never macos-latest: upgrades are deliberate (macos-14 is not available to this account)
     steps:
       - uses: actions/checkout@v4
       - run: brew install ninja
@@ -163,7 +159,7 @@ jobs:
 
   # Static libraries for iOS device and simulator, merged with pffft and packaged as an xcframework for the Flutter plugin.
   ios:
-    runs-on: macos-14   # pinned (see test-macos-arm64)
+    runs-on: macos-15   # pinned (see test-macos-arm64)
     steps:
       - uses: actions/checkout@v4
       - run: brew install ninja
