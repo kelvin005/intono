@@ -132,6 +132,7 @@ jobs:
       - name: Boot the emulator and run the tests
         run: |
           export PATH="$SDK/platform-tools:$SDK/emulator:$SDK/cmdline-tools/latest/bin:$PATH"
+          export ANDROID_AVD_HOME="$HOME/.android/avd"; mkdir -p "$ANDROID_AVD_HOME"   # avdmanager and emulator must agree on where AVDs live
           printf 'no\n' | avdmanager create avd -n ci -k "system-images;android-34;google_apis;x86_64" -d pixel_5 --force
           avdmanager list avd | head -12
           emulator -list-avds | grep -x ci
