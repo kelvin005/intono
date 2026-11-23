@@ -9,6 +9,7 @@ class FakeAudio implements AudioControl {
   bool started = false;
   bool startResult = true;
   bool? drone;
+  bool headphones = false;
   int pointer = 4242;
 
   @override
@@ -25,6 +26,9 @@ class FakeAudio implements AudioControl {
     drone = on;
     return true;
   }
+
+  @override
+  Future<bool> headphonesConnected() async => headphones;
 
   @override
   Future<String> info() async => started ? 'input: AAudio, Exclusive, 48000 Hz' : 'stopped';
@@ -93,5 +97,30 @@ void main() {
     expect(audio.drone, isTrue);
     expect(find.text('Drone: on'), findsOneWidget);
     expect(find.text('Use headphones for accurate results'), findsOneWidget);
+  });
+
+  testWidgets('with headphones the drone is on by default and there is no warning', (tester) async {
+    final audio = FakeAudio()..headphones = true;
+    await tester.pumpWidget(host(DebugScreen(audio: audio, engineFactory: (_) => FakeEngine())));
+    await tester.tap(find.text('Start'));
+    await tester.pump();
+    await tester.pump();
+    expect(audio.drone, isTrue);
+    expect(find.text('Drone: on'), findsOneWidget);
+    expect(find.text('Use headphones for accurate results'), findsNothing);
+  });
+
+  testWidgets('capture stops when the app is hidden, before the engine can go away', (tester) async {
+    final audio = FakeAudio();
+    await tester.pumpWidget(host(DebugScreen(audio: audio, engineFactory: (_) => FakeEngine())));
+    await tester.tap(find.text('Start'));
+    await tester.pump();
+    await tester.pump();
+    expect(audio.started, isTrue);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    await tester.pump();
+    await tester.pump();
+    expect(audio.started, isFalse);
+    expect(find.text('Start'), findsOneWidget);
   });
 }
