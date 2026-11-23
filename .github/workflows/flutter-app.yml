@@ -1,0 +1,26 @@
+name: flutter-app
+# ADR 0009 decision 3 and 6: the Flutter app. Flutter is installed from the official archive at a pinned version whose SHA-256 is in the
+# repository (app/.flutter-version, app/.flutter-sha256); no third-party action.
+on:
+  workflow_dispatch:
+  push:
+    paths: ["app/**", "dsp/include/intono/intono.h", ".github/workflows/flutter-app.yml"]
+  pull_request:
+    paths: ["app/**", "dsp/include/intono/intono.h", ".github/workflows/flutter-app.yml"]
+
+jobs:
+  discover:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Current stable Flutter (Google's release manifest)
+        run: |
+          curl -fsSL https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json -o r.json
+          python3 - <<'PY'
+          import json
+          d = json.load(open("r.json"))
+          cur = d["current_release"]["stable"]
+          for r in d["releases"]:
+              if r["hash"] == cur and r["channel"] == "stable":
+                  print("VERSION", r["version"]); print("ARCHIVE", r["archive"]); print("SHA256", r["sha256"]); print("DART", r.get("dart_sdk_version"))
+                  break
+          PY
