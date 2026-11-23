@@ -71,9 +71,37 @@ TimingSummary Timing::summary() const {
 }
 }  // namespace detail
 
+namespace {
+constexpr uint64_t kValueMask = (1ULL << 23) - 1;
+constexpr uint64_t kFlagBit = 1ULL << 23;
+constexpr uint64_t kTimeMask = (1ULL << 40) - 1;
+}  // namespace
+
+namespace detail {
+void EventRing::push(int64_t t_us, uint64_t value, bool flag) {
+  const uint64_t c = count_.load(std::memory_order_relaxed);
+  const uint64_t packed = ((static_cast<uint64_t>(t_us < 0 ? 0 : t_us) & kTimeMask) << 24) | (flag ? kFlagBit : 0) | std::min(value, kValueMask);
+  slots_[c % kCap].store(packed, std::memory_order_relaxed);
+  count_.store(c + 1, std::memory_order_release);
+}
+
+std::vector<EventRing::Item> EventRing::read() const {
+  std::vector<Item> out;
+  const uint64_t c = count_.load(std::memory_order_acquire);
+  const uint64_t n = std::min<uint64_t>(c, kCap);
+  out.reserve(static_cast<size_t>(n));
+  for (uint64_t i = c - n; i < c; ++i) {
+    const uint64_t v = slots_[i % kCap].load(std::memory_order_relaxed);
+    out.push_back(Item{static_cast<int64_t>(v >> 24), v & kValueMask, (v & kFlagBit) != 0});
+  }
+  return out;
+}
+}  // namespace detail
+
 AudioPump::AudioPump(EngineOps ops, PumpConfig cfg, Clock clock) : ops_(ops), cfg_(cfg), clock_(clock) {
   if (cfg_.hop_size < 1) cfg_.hop_size = 1;
   if (cfg_.sample_rate < 1) cfg_.sample_rate = 48000;
+  epoch_ns_.store(now(), std::memory_order_relaxed);
 }
 
 int64_t AudioPump::now() const {
@@ -81,24 +109,40 @@ int64_t AudioPump::now() const {
   return std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
 }
 
-void AudioPump::on_input(const float* in, int n) {
+void AudioPump::on_input(const float* in, int n, InputInfo info) {
   if (!in || n <= 0) return;
+  const int64_t t0 = now();
   if (reset_in_.exchange(false, std::memory_order_acq_rel)) {
     chunk_.clear();
     callback_.clear();
     in_callbacks_.store(0, std::memory_order_relaxed);
     in_frames_.store(0, std::memory_order_relaxed);
+    late_.store(0, std::memory_order_relaxed);
     in_gaps_.store(0, std::memory_order_relaxed);
+    gap_frames_.store(0, std::memory_order_relaxed);
+    overruns_.store(0, std::memory_order_relaxed);
+    slow_.store(0, std::memory_order_relaxed);
+    position_supported_.store(false, std::memory_order_relaxed);
+    late_ring_.clear();
+    gap_ring_.clear();
+    slow_ring_.clear();
+    epoch_ns_.store(t0, std::memory_order_relaxed);
     prev_n_ = 0;
+    pos_seen_ = pos_valid_ = false;
+    xr_seen_ = false;
   }
-  const int64_t t0 = now();
+  const int64_t epoch = epoch_ns_.load(std::memory_order_relaxed);
   if (prev_n_ > 0) {
     const double expected_ns = 1e9 * static_cast<double>(prev_n_) / static_cast<double>(cfg_.sample_rate);
-    if (static_cast<double>(t0 - prev_start_ns_) > cfg_.gap_factor * expected_ns)
-      in_gaps_.store(in_gaps_.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
+    const double dt = static_cast<double>(t0 - prev_start_ns_);
+    if (dt > cfg_.gap_factor * expected_ns) {
+      late_.store(late_.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
+      late_ring_.push((t0 - epoch) / 1000, static_cast<uint64_t>((dt - expected_ns) / 1000.0));
+    }
   }
   prev_start_ns_ = t0;
   prev_n_ = n;
+  note_position(info, n, t0);
 
   if (ops_.process) {
     int done = 0;
@@ -106,13 +150,64 @@ void AudioPump::on_input(const float* in, int n) {
       const int m = std::min(cfg_.hop_size, n - done);
       const int64_t a = now();
       ops_.process(ops_.ctx, in + done, m);
-      chunk_.add(now() - a);
+      const int64_t cost = now() - a;
+      chunk_.add(cost);
+      if (cost > cfg_.slow_hop_ns) {
+        slow_.store(slow_.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
+        slow_ring_.push((a - epoch) / 1000, static_cast<uint64_t>(cost / 1000));
+      }
       done += m;
     }
   }
   callback_.add(now() - t0);
   in_callbacks_.store(in_callbacks_.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
   in_frames_.store(in_frames_.load(std::memory_order_relaxed) + static_cast<uint64_t>(n), std::memory_order_relaxed);
+}
+
+void AudioPump::note_position(const InputInfo& info, int n, int64_t t0) {
+  const int64_t epoch = epoch_ns_.load(std::memory_order_relaxed);
+  const int64_t delivered = static_cast<int64_t>(in_frames_.load(std::memory_order_relaxed));   // frames passed to the pump before this callback
+
+  if (info.xruns >= 0) {
+    if (!xr_seen_) {
+      xr_seen_ = true;
+      xr_base_ = xr_prev_ = info.xruns;
+    } else if (info.xruns > xr_prev_) {
+      overruns_.store(static_cast<uint64_t>(info.xruns - xr_base_), std::memory_order_relaxed);
+      gap_ring_.push((t0 - epoch) / 1000, static_cast<uint64_t>(info.xruns - xr_prev_), true);
+      xr_prev_ = info.xruns;
+    }
+  }
+
+  if (info.position < 0) return;
+  const int64_t a = info.position - delivered;   // offset under convention A
+  const int64_t b = a - n;                       // offset under convention B
+  if (!pos_seen_) {
+    pos_seen_ = true;
+    pos_first_ = info.position;
+    off_a_ = a;
+    off_b_ = b;
+    chg_a_ = chg_b_ = 0;
+    return;
+  }
+  if (!pos_valid_) {
+    if (info.position == pos_first_) return;   // a counter that does not move is no use (some devices report a constant 0)
+    pos_valid_ = true;
+    position_supported_.store(true, std::memory_order_relaxed);
+    off_a_ = a;
+    off_b_ = b;
+    chg_a_ = chg_b_ = 0;
+    return;
+  }
+  const int64_t da = a - off_a_, db = b - off_b_;
+  if (da != 0) { ++chg_a_; off_a_ = a; }
+  if (db != 0) { ++chg_b_; off_b_ = b; }
+  const int64_t jump = (chg_b_ <= chg_a_) ? db : da;   // the convention that has changed less is the real one
+  if (jump > 0) {
+    in_gaps_.store(in_gaps_.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
+    gap_frames_.store(gap_frames_.load(std::memory_order_relaxed) + static_cast<uint64_t>(jump), std::memory_order_relaxed);
+    gap_ring_.push((t0 - epoch) / 1000, static_cast<uint64_t>(jump), false);
+  }
 }
 
 void AudioPump::on_output(float* out, int n) {
@@ -141,11 +236,28 @@ PumpStats AudioPump::snapshot() const {
   s.drone = drone_.summary();
   s.input_callbacks = in_callbacks_.load(std::memory_order_relaxed);
   s.input_frames = in_frames_.load(std::memory_order_relaxed);
+  s.late_callbacks = late_.load(std::memory_order_relaxed);
   s.input_gaps = in_gaps_.load(std::memory_order_relaxed);
+  s.gap_frames = gap_frames_.load(std::memory_order_relaxed);
+  s.input_overruns = overruns_.load(std::memory_order_relaxed);
+  s.slow_hops = slow_.load(std::memory_order_relaxed);
+  s.position_supported = position_supported_.load(std::memory_order_relaxed);
+  s.epoch_ns = epoch_ns_.load(std::memory_order_relaxed);
   s.output_callbacks = out_callbacks_.load(std::memory_order_relaxed);
   s.output_frames = out_frames_.load(std::memory_order_relaxed);
   s.output_xruns = out_xruns_.load(std::memory_order_relaxed);
   return s;
+}
+
+std::vector<PumpEvent> AudioPump::events(EventKind kind) const {
+  std::vector<PumpEvent> out;
+  const detail::EventRing& ring = kind == EventKind::LateCallback ? late_ring_ : kind == EventKind::SlowHop ? slow_ring_ : gap_ring_;
+  for (const auto& it : ring.read()) {
+    if (kind == EventKind::PositionGap && it.flag) continue;
+    if (kind == EventKind::Overrun && !it.flag) continue;
+    out.push_back(PumpEvent{kind, static_cast<double>(it.t_us) / 1e6, it.value});
+  }
+  return out;
 }
 
 }  // namespace intono_shim
