@@ -5,11 +5,12 @@ import 'drone_policy.dart';
 import 'engine_api.dart';
 import 'frame_poller.dart';
 import 'meter_state.dart';
+import 'meter_view.dart';
 
 typedef EngineFactory = EngineApi Function(int enginePointer);
 
-/// Phase 2 PR 3: a text-only screen that proves the whole path (permission, Oboe, engine, FFI, vsync polling). The live-meter screen
-/// (note, cents, needle) replaces it in the next PR.
+/// The Phase 2 screen: live meter (note, cents, needle) over the Start/Stop and drone controls and the stream facts. It also carries what
+/// the Android harness shows, so the harness can be retired (ADR 0009 Note 1).
 class DebugScreen extends StatefulWidget {
   const DebugScreen({super.key, required this.audio, required this.engineFactory});
 
@@ -133,14 +134,15 @@ class _DebugScreenState extends State<DebugScreen> with TickerProviderStateMixin
       child: SafeArea(
         child: DefaultTextStyle(
           style: const TextStyle(color: Color(0xFFE8ECEF), fontSize: 16, decoration: TextDecoration.none),
-          child: Padding(
+          child: SingleChildScrollView(
+            child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ValueListenableBuilder<MeterState>(
                   valueListenable: _meter,
-                  builder: (context, s, _) => Text(s.label, style: const TextStyle(fontSize: 44, fontWeight: FontWeight.w600)),
+                  builder: (context, s, _) => Center(child: MeterView(state: s)),
                 ),
                 const SizedBox(height: 16),
                 _Button(label: _running ? 'Stop' : 'Start', onTap: _running ? _stop : _start),
@@ -150,6 +152,7 @@ class _DebugScreenState extends State<DebugScreen> with TickerProviderStateMixin
                 const SizedBox(height: 16),
                 GestureDetector(onTap: _refreshInfo, child: Text(_info)),
               ],
+            ),
             ),
           ),
         ),

@@ -10,12 +10,27 @@ class MeterState {
   final double hz; // the displayed pitch (vibrato centre)
   final double tSec;
 
-  /// "A4  +3.0", or "--" when unvoiced.
-  String get label {
-    if (!voiced) return '--';
+  /// "A4", or "--" when unvoiced.
+  String get noteLabel => voiced ? noteName(midiNote) : '--';
+
+  /// "+3.0" / "-12.5" (one decimal, always signed), or "" when unvoiced.
+  String get centsLabel {
+    if (!voiced) return '';
     var c = cents.toStringAsFixed(1);
     if (c == '-0.0') c = '0.0';
-    return '${noteName(midiNote)}  ${c.startsWith('-') ? c : '+$c'}';
+    return c.startsWith('-') ? c : '+$c';
+  }
+
+  /// "A4  +3.0", or "--" when unvoiced.
+  String get label => voiced ? '$noteLabel  $centsLabel' : '--';
+
+  /// What a screen reader says for the whole meter.
+  String get semanticsLabel {
+    if (!voiced) return 'No note';
+    final c = cents.toStringAsFixed(1);
+    if (c == '0.0' || c == '-0.0') return '$noteLabel, in tune';
+    final mag = cents.abs().toStringAsFixed(1);
+    return '$noteLabel, $mag cents ${cents > 0 ? 'sharp' : 'flat'}';
   }
 }
 
