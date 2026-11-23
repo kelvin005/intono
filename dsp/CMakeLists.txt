@@ -88,7 +88,7 @@ if(INTONO_BUILD_TESTS)
   # Real-time safety: wraps malloc/calloc/realloc/free and pthread_mutex_lock so the test
   # fails if intono_process or intono_drone_render allocates or locks. Not combined with
   # sanitizers (they interpose the same symbols).
-  if(NOT INTONO_SAN AND UNIX AND NOT APPLE)
+  if(NOT INTONO_SAN AND UNIX AND NOT APPLE AND NOT ANDROID)   # glibc symbols: not bionic (ADR 0005)
     add_executable(intono_rt_safety tests/test_rt_safety.cpp)
     target_include_directories(intono_rt_safety PRIVATE src)
     target_compile_options(intono_rt_safety PRIVATE ${INTONO_WARN})

@@ -1,5 +1,6 @@
 name: dsp
 on:
+  workflow_dispatch:   # manual runs (no path filter)
   push:
     paths: ["dsp/**", "tools/accuracy/**", ".github/workflows/dsp.yml"]
   pull_request:
@@ -35,7 +36,11 @@ jobs:
   # Real arm64 silicon (Apple M-series): runs the whole unit-test suite with the NEON pffft path and the ARM memory
   # model. The real-time safety test is Linux-only (link-time malloc wrapping) and is skipped by CMake here.
   test-macos-arm64:
-    runs-on: macos-14
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, macos-15]   # pinned Apple Silicon labels, never macos-latest: upgrades are deliberate
     steps:
       - uses: actions/checkout@v4
       - run: brew install ninja
@@ -86,9 +91,73 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: "libintono-android-${{ matrix.abi }}", path: build/libintono.so }
 
+  # ADR 0005, option B: the unit tests run on an Android emulator (API 34, x86_64, KVM) with the NDK and SDK tools that ship on the
+  # runner image, no third-party action. The real-time safety binary is not built for Android (it wraps glibc symbols). The suite runs
+  # twice, as on the host: inline, and through the note worker thread (INTONO_TEST_THREADED=1, ADR 0008). arm64 is not executed here.
+  android-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Locate the NDK
+        run: |
+          NDK="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
+          test -f "$NDK/build/cmake/android.toolchain.cmake" || { echo "no NDK on this runner image"; exit 1; }
+          echo "NDK=$NDK" >> "$GITHUB_ENV"
+          grep Pkg.Revision "$NDK/source.properties"
+      - name: Build the unit tests for x86_64 (bionic)
+        run: |
+          cmake -S dsp -B build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=x86_64 -DANDROID_PLATFORM=android-24 -DANDROID_STL=c++_static \
+            -DCMAKE_BUILD_TYPE=Release -DINTONO_BUILD_CLI=OFF
+          cmake --build build --target intono_tests
+          file build/intono_tests
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -l /dev/kvm || { echo "no /dev/kvm on this runner: the emulator would be software-only and far too slow (see ADR 0005)"; exit 1; }
+      - name: Install the emulator and the system image
+        run: |
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          echo "SDK=$SDK" >> "$GITHUB_ENV"
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --install "platform-tools" "emulator" "system-images;android-34;google_apis;x86_64"
+          "$SDK/cmdline-tools/latest/bin/sdkmanager" --list_installed | grep -E "platform-tools|emulator|system-images"   # the exact revisions used, for the log
+      - name: Boot the emulator and run the tests
+        run: |
+          export PATH="$SDK/platform-tools:$SDK/emulator:$SDK/cmdline-tools/latest/bin:$PATH"
+          echo no | avdmanager create avd -n ci -k "system-images;android-34;google_apis;x86_64" --force
+          nohup emulator -avd ci -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel on > emulator.log 2>&1 &
+          timeout 600 adb wait-for-device
+          for i in $(seq 1 120); do
+            [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ] && break
+            sleep 5
+          done
+          [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ] || { echo "emulator did not boot"; tail -50 emulator.log; exit 1; }
+          adb shell getprop ro.build.version.sdk; adb shell getprop ro.product.cpu.abi
+          adb push build/intono_tests /data/local/tmp/intono_tests
+          adb shell chmod +x /data/local/tmp/intono_tests
+          rc=0
+          for mode in inline threaded; do
+            env=""; [ "$mode" = threaded ] && env="INTONO_TEST_THREADED=1"
+            adb shell "cd /data/local/tmp && $env ./intono_tests; echo EXIT=\$?" 2>&1 | tee "tests-$mode.log"
+            grep -q "EXIT=0" "tests-$mode.log" && grep -q "PASSED" "tests-$mode.log" || rc=1
+          done
+          adb emu kill || true
+          exit $rc
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: android-test-logs, path: "*.log" }
+
   # Static libraries for iOS device and simulator, merged with pffft and packaged as an xcframework for the Flutter plugin.
   ios:
-    runs-on: macos-14
+    runs-on: macos-14   # pinned (see test-macos-arm64)
     steps:
       - uses: actions/checkout@v4
       - run: brew install ninja
@@ -124,5 +193,4 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: intono-xcframework, path: build/intono.xcframework }
 
-# Still to do: run the public datasets (URMP, NSynth) in the accuracy gate, and run the unit tests on an
-# Android emulator and an iOS simulator (needs a third-party emulator action, so an ADR first).
+# Still to do: run the public datasets (URMP, NSynth) in the accuracy gate, and run the unit tests on an iOS simulator.
