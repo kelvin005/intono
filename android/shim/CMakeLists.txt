@@ -11,6 +11,9 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 option(INTONO_SHIM_BUILD_TESTS "Build the AudioPump tests" ON)
+if(ANDROID)
+  set(INTONO_SHIM_BUILD_TESTS OFF CACHE BOOL "" FORCE)   # the host tests run on the host; Gradle builds only the library
+endif()
 set(INTONO_SANITIZE "none" CACHE STRING "none, address (ASan+UBSan) or thread (TSan)")
 
 # libintono, exactly as in Phase 1 (no tests, no CLI from here; same sanitizer choice).
@@ -33,6 +36,24 @@ target_compile_options(intono_shim_core PRIVATE ${SHIM_WARN} ${SHIM_SAN})
 target_link_libraries(intono_shim_core PUBLIC intono)
 if(SHIM_SAN)
   target_link_options(intono_shim_core PUBLIC ${SHIM_SAN})
+endif()
+
+# ---- Android library: libintono + AudioPump + Oboe streams + JNI (built by Gradle, ADR 0009) -----------------------------------
+if(ANDROID)
+  find_package(oboe REQUIRED CONFIG)   # Prefab package from Google Maven (shared STL only)
+  add_library(intono_android SHARED src/oboe_audio.cpp src/jni_bridge.cpp)
+  target_compile_options(intono_android PRIVATE ${SHIM_WARN})
+  target_link_libraries(intono_android PRIVATE intono_shim_core oboe::oboe log)
+  # libintono is a static archive: keep the whole C API in the library (Dart looks the symbols up with dlsym) and export only
+  # intono_*, the JNI entry points and JNI_OnLoad.
+  set(INTONO_API_SYMS intono_create intono_process intono_read_frames intono_read_notes intono_set_tonic intono_drone_set
+      intono_drone_render intono_destroy)
+  foreach(sym ${INTONO_API_SYMS})
+    target_link_options(intono_android PRIVATE -Wl,--undefined=${sym})
+  endforeach()
+  target_link_options(intono_android PRIVATE
+    -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/exports.map
+    -Wl,-z,max-page-size=16384)   # Google Play: 16 KB page alignment for Android 15+
 endif()
 
 if(INTONO_SHIM_BUILD_TESTS)

@@ -1,0 +1,8 @@
+{
+  global:
+    intono_*;
+    Java_com_example_intono_*;
+    JNI_OnLoad;
+  local:
+    *;
+};
