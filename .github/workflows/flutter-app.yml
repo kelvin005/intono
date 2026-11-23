@@ -9,18 +9,27 @@ on:
     paths: ["app/**", "dsp/include/intono/intono.h", ".github/workflows/flutter-app.yml"]
 
 jobs:
-  discover:
+  install-check:
     runs-on: ubuntu-24.04
     steps:
-      - name: Current stable Flutter (Google's release manifest)
+      - uses: actions/checkout@v4
+      - name: Install the pinned Flutter (checksum verified)
         run: |
-          curl -fsSL https://storage.googleapis.com/flutter_infra_release/releases/releases_linux.json -o r.json
-          python3 - <<'PY'
-          import json
-          d = json.load(open("r.json"))
-          cur = d["current_release"]["stable"]
-          for r in d["releases"]:
-              if r["hash"] == cur and r["channel"] == "stable":
-                  print("VERSION", r["version"]); print("ARCHIVE", r["archive"]); print("SHA256", r["sha256"]); print("DART", r.get("dart_sdk_version"))
-                  break
-          PY
+          V=$(cat app/.flutter-version); SUM=$(cat app/.flutter-sha256)
+          curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${V}-stable.tar.xz" -o flutter.tar.xz
+          echo "$SUM  flutter.tar.xz" | sha256sum -c -
+          tar -xf flutter.tar.xz -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Analytics off, version
+        run: |
+          flutter config --no-analytics --no-cli-animations
+          dart --disable-analytics
+          flutter --version
+      - name: Scratch project, to learn the generated Android template and the pub versions
+        run: |
+          cd "$RUNNER_TEMP" && flutter create --platforms=android --org com.example --project-name intono_app scratch > /dev/null
+          cd scratch && flutter pub add ffi > /dev/null && flutter pub add --dev ffigen > /dev/null
+          grep -E "^  (ffi|ffigen|flutter_lints):" -A0 pubspec.yaml; grep -E "^  (ffi|ffigen|flutter_lints|lints):" -A3 pubspec.lock | grep -E "^  [a-z_]+:|version:"
+          for f in $(find android -type f \( -name "*.kts" -o -name "*.gradle" -o -name "*.properties" -o -name "*.xml" -o -name "*.kt" \) | sort) pubspec.yaml analysis_options.yaml lib/main.dart test/widget_test.dart .gitignore; do
+            echo "=====FILE $f"; cat "$f"; echo "=====END"
+          done
