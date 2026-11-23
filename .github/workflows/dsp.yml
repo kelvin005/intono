@@ -96,7 +96,7 @@ jobs:
   # twice, as on the host: inline, and through the note worker thread (INTONO_TEST_THREADED=1, ADR 0008). arm64 is not executed here.
   android-test:
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 30
     permissions:
       contents: read
     steps:
@@ -133,13 +133,16 @@ jobs:
         run: |
           export PATH="$SDK/platform-tools:$SDK/emulator:$SDK/cmdline-tools/latest/bin:$PATH"
           echo no | avdmanager create avd -n ci -k "system-images;android-34;google_apis;x86_64" --force
-          nohup emulator -avd ci -no-window -no-audio -no-boot-anim -no-snapshot -gpu swiftshader_indirect -accel on > emulator.log 2>&1 &
-          timeout 600 adb wait-for-device
+          emulator -version | head -3
+          nohup emulator -avd ci -no-window -no-audio -no-boot-anim -no-snapshot -no-metrics -gpu swiftshader_indirect -accel on > emulator.log 2>&1 &
+          EMU=$!
           for i in $(seq 1 120); do
-            [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ] && break
+            kill -0 $EMU 2>/dev/null || { echo "emulator process exited early"; cat emulator.log; exit 1; }
+            [ "$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')" = "1" ] && break
+            [ $((i % 6)) -eq 0 ] && { echo "--- waiting ($((i*5)) s), adb devices:"; adb devices; tail -5 emulator.log; }
             sleep 5
           done
-          [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ] || { echo "emulator did not boot"; tail -50 emulator.log; exit 1; }
+          [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ] || { echo "emulator did not boot"; cat emulator.log; exit 1; }
           adb shell getprop ro.build.version.sdk; adb shell getprop ro.product.cpu.abi
           adb push build/intono_tests /data/local/tmp/intono_tests
           adb shell chmod +x /data/local/tmp/intono_tests
