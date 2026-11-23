@@ -143,7 +143,7 @@ TEST(AudioPumpTiming, TheWorstChunkIsKeptAcrossManyCallbacks) {
   EXPECT_GE(s.chunk.p99_ns, 9000.0 * 0.0);   // 10 slow of 60 is above p99 only when count is large; max is the contract here
 }
 
-TEST(AudioPumpGaps, ACallbackLateByMoreThanOneAndAHalfPeriodsIsAnInputGap) {
+TEST(AudioPumpLate, ACallbackLateByMoreThanOneAndAHalfPeriodsIsCountedAsLate) {
   FakeEngine e;
   AudioPump p(e.ops(), cfg(48000, 256), e.clk());
   std::vector<float> in(480);
@@ -153,21 +153,22 @@ TEST(AudioPumpGaps, ACallbackLateByMoreThanOneAndAHalfPeriodsIsAnInputGap) {
     e.now = v;
     p.on_input(in.data(), 480);
   }
-  EXPECT_EQ(p.snapshot().input_gaps, 2u);
+  EXPECT_EQ(p.snapshot().late_callbacks, 2u);
+  EXPECT_EQ(p.snapshot().input_gaps, 0u);   // lateness by the wall clock is not a gap (device run 2026-11-23: shared-mode bursts look late)
   EXPECT_EQ(p.snapshot().input_callbacks, 7u);
 }
 
-TEST(AudioPumpGaps, TheFirstCallbackAndTheFirstAfterAResetHaveNoGap) {
+TEST(AudioPumpLate, TheFirstCallbackAndTheFirstAfterAResetAreNeverLate) {
   FakeEngine e;
   AudioPump p(e.ops(), cfg(), e.clk());
   std::vector<float> in(480);
   e.now = 5000000000LL;
   p.on_input(in.data(), 480);
-  EXPECT_EQ(p.snapshot().input_gaps, 0u);
+  EXPECT_EQ(p.snapshot().late_callbacks, 0u);
   p.request_reset();
   e.now = 9000000000LL;
   p.on_input(in.data(), 480);
-  EXPECT_EQ(p.snapshot().input_gaps, 0u);
+  EXPECT_EQ(p.snapshot().late_callbacks, 0u);
 }
 
 TEST(AudioPumpDrone, OffByDefaultAndTheOutputIsSilence) {
@@ -284,7 +285,7 @@ TEST(AudioPumpThreads, StatsControlsAndTheTwoStreamsMayRunConcurrently) {
   struct Proc { static void process(void*, const float*, int) {} };
   AudioPump p(EngineOps{nullptr, &Proc::process, &Drone::render}, cfg());
   std::atomic<bool> stop{false};
-  std::thread in_t([&] { std::vector<float> in(480); while (!stop) p.on_input(in.data(), 480); });
+  std::thread in_t([&] { std::vector<float> in(480); int64_t pos = 0; while (!stop) { pos += 480; p.on_input(in.data(), 480, InputInfo{pos, pos / 480}); } });
   std::thread out_t([&] { std::vector<float> out(480); while (!stop) p.on_output(out.data(), 480); });
   std::thread ctl([&] {
     for (int i = 0; i < 2000; ++i) {
@@ -292,6 +293,8 @@ TEST(AudioPumpThreads, StatsControlsAndTheTwoStreamsMayRunConcurrently) {
       p.set_output_xruns(static_cast<uint64_t>(i));
       if (i % 50 == 0) p.request_reset();
       (void)p.snapshot();
+      (void)p.events(EventKind::SlowHop);
+      (void)p.events(EventKind::PositionGap);
     }
     stop = true;
   });
@@ -299,4 +302,172 @@ TEST(AudioPumpThreads, StatsControlsAndTheTwoStreamsMayRunConcurrently) {
   in_t.join();
   out_t.join();
   SUCCEED();
+}
+
+// ---- Device findings (Kelechi, Infinix Note 30, 2026-11-23): ~10 "gaps"/s by the wall clock in shared mode; a gap is now a stream
+// ---- position discontinuity, the old count is kept as "late callbacks". Slow hops are logged with their time.
+
+namespace {
+// A stream as the position counter sees it. includes_current: the counter already includes the callback's own frames (AAudio reads the
+// data before it calls the callback); otherwise it is the frames read before the callback. skip() models an overrun that drops frames.
+struct SimStream {
+  bool includes_current;
+  int64_t read = 0, skipped = 0;
+  InputInfo next(int n) {
+    InputInfo i;
+    i.position = read + skipped + (includes_current ? n : 0);
+    read += n;
+    return i;
+  }
+  void skip(int64_t g) { skipped += g; }
+};
+
+const int kSizes[] = {96, 192, 144, 288, 96, 240, 192, 120};   // shared-mode callbacks vary around the burst
+}  // namespace
+
+class PositionGaps : public ::testing::TestWithParam<bool> {};
+
+TEST_P(PositionGaps, SteadyStreamWithVaryingCallbackSizesAndIrregularArrivalHasNoGaps) {
+  FakeEngine e;
+  AudioPump p(e.ops(), cfg(), e.clk());
+  SimStream st{GetParam()};
+  std::vector<float> in(512);
+  int64_t t = 0;
+  for (int i = 0; i < 400; ++i) {
+    const int n = kSizes[i % 8];
+    t += (i % 2 ? 21000000 : 1000000);   // bursts: a late callback, then a catch-up one
+    e.now = t;
+    p.on_input(in.data(), n, st.next(n));
+  }
+  const PumpStats s = p.snapshot();
+  EXPECT_EQ(s.input_gaps, 0u);
+  EXPECT_EQ(s.gap_frames, 0u);
+  EXPECT_TRUE(s.position_supported);
+  EXPECT_GT(s.late_callbacks, 0u);   // by the wall clock this looks like trouble; by position it is not
+  EXPECT_TRUE(p.events(EventKind::PositionGap).empty());
+}
+
+TEST_P(PositionGaps, ADroppedStretchIsOneGapWithItsSizeAndTime) {
+  FakeEngine e;
+  AudioPump p(e.ops(), cfg(), e.clk());
+  SimStream st{GetParam()};
+  std::vector<float> in(512);
+  for (int i = 0; i < 300; ++i) {
+    const int n = kSizes[i % 8];
+    e.now = static_cast<int64_t>(i) * 3000000;
+    if (i == 150 || i == 250) st.skip(i == 150 ? 480 : 96);
+    p.on_input(in.data(), n, st.next(n));
+  }
+  const PumpStats s = p.snapshot();
+  EXPECT_EQ(s.input_gaps, 2u);
+  EXPECT_EQ(s.gap_frames, 576u);
+  const auto ev = p.events(EventKind::PositionGap);
+  ASSERT_EQ(ev.size(), 2u);
+  EXPECT_EQ(ev[0].value, 480u);
+  EXPECT_NEAR(ev[0].t_s, 0.450, 1e-6);   // callback 150 at 150 * 3 ms
+  EXPECT_EQ(ev[1].value, 96u);
+  EXPECT_NEAR(ev[1].t_s, 0.750, 1e-6);
+}
+
+INSTANTIATE_TEST_SUITE_P(BothPositionConventions, PositionGaps, ::testing::Values(false, true));
+
+TEST(PositionGapsUnsupported, NoPositionOrAFrozenPositionNeverCountsGaps) {
+  FakeEngine e;
+  AudioPump p(e.ops(), cfg(), e.clk());
+  std::vector<float> in(512);
+  for (int i = 0; i < 100; ++i) p.on_input(in.data(), kSizes[i % 8]);   // no position at all
+  EXPECT_FALSE(p.snapshot().position_supported);
+  EXPECT_EQ(p.snapshot().input_gaps, 0u);
+
+  FakeEngine e2;
+  AudioPump q(e2.ops(), cfg(), e2.clk());
+  for (int i = 0; i < 100; ++i) q.on_input(in.data(), kSizes[i % 8], InputInfo{0, -1});   // a device that always reports 0
+  EXPECT_FALSE(q.snapshot().position_supported);
+  EXPECT_EQ(q.snapshot().input_gaps, 0u);
+}
+
+TEST(PositionGapsReset, AResetRetakesTheBaseline) {
+  FakeEngine e;
+  AudioPump p(e.ops(), cfg(), e.clk());
+  SimStream st{true};
+  std::vector<float> in(512);
+  for (int i = 0; i < 20; ++i) p.on_input(in.data(), 192, st.next(192));
+  st.skip(1000);   // the position jumps while nobody counts (a reset is requested right then)
+  p.request_reset();
+  for (int i = 0; i < 20; ++i) p.on_input(in.data(), 192, st.next(192));
+  EXPECT_EQ(p.snapshot().input_gaps, 0u);
+  EXPECT_TRUE(p.snapshot().position_supported);
+  EXPECT_EQ(p.snapshot().input_callbacks, 20u);
+}
+
+TEST(StreamOverruns, TheStreamsOwnOverrunCountIsReportedWithItsIncrements) {
+  FakeEngine e;
+  AudioPump p(e.ops(), cfg(), e.clk());
+  std::vector<float> in(480);
+  const int64_t x[] = {4, 4, 4, 6, 6, 9, 9};   // the first reading is the baseline: 4 overruns before this run do not count
+  for (int i = 0; i < 7; ++i) {
+    e.now = i * 10000000LL;
+    p.on_input(in.data(), 480, InputInfo{-1, x[i]});
+  }
+  EXPECT_EQ(p.snapshot().input_overruns, 5u);
+  const auto ev = p.events(EventKind::Overrun);
+  ASSERT_EQ(ev.size(), 2u);
+  EXPECT_EQ(ev[0].value, 2u);
+  EXPECT_NEAR(ev[0].t_s, 0.030, 1e-6);
+  EXPECT_EQ(ev[1].value, 3u);
+  EXPECT_NEAR(ev[1].t_s, 0.050, 1e-6);
+
+  FakeEngine e2;
+  AudioPump q(e2.ops(), cfg(), e2.clk());
+  for (int i = 0; i < 10; ++i) q.on_input(in.data(), 480);   // unavailable
+  EXPECT_EQ(q.snapshot().input_overruns, 0u);
+}
+
+TEST(SlowHops, HopsOverTheThresholdAreLoggedWithTheirTimeAndCost) {
+  FakeEngine e;
+  e.cost = {100000, 100000, 1500000, 100000, 1000000, 1000001};   // 1.0 ms is not slow, the threshold is exclusive
+  PumpConfig c = cfg();
+  c.slow_hop_ns = 1000000;
+  AudioPump p(e.ops(), c, e.clk());
+  std::vector<float> in(256);
+  for (int i = 0; i < 6; ++i) {
+    e.now = 10000000000LL + i * 5000000LL;
+    p.on_input(in.data(), 256);
+    e.now += 0;
+  }
+  const PumpStats s = p.snapshot();
+  EXPECT_EQ(s.slow_hops, 2u);
+  const auto ev = p.events(EventKind::SlowHop);
+  ASSERT_EQ(ev.size(), 2u);
+  EXPECT_EQ(ev[0].value, 1500u);   // microseconds
+  EXPECT_EQ(ev[1].value, 1000u);   // 1000001 ns rounds down to 1000 us
+  EXPECT_LT(ev[0].t_s, ev[1].t_s);
+}
+
+TEST(SlowHops, TheLogKeepsTheNewestThirtyTwoWhileTheCountKeepsAll) {
+  FakeEngine e;
+  e.cost = {2000000};
+  AudioPump p(e.ops(), cfg(), e.clk());
+  std::vector<float> in(256);
+  for (int i = 0; i < 40; ++i) {
+    e.now = i * 6000000LL;
+    p.on_input(in.data(), 256);
+  }
+  EXPECT_EQ(p.snapshot().slow_hops, 40u);
+  const auto ev = p.events(EventKind::SlowHop);
+  ASSERT_EQ(ev.size(), 32u);
+  EXPECT_NEAR(ev.front().t_s, (8 * 6000000LL) / 1e9, 1e-6);   // hops 8 .. 39
+  EXPECT_NEAR(ev.back().t_s, (39 * 6000000LL) / 1e9, 1e-6);
+}
+
+TEST(PumpEpoch, EventTimesCountFromTheEpochWhichIsReportedAbsolutelyAndRestartsOnReset) {
+  FakeEngine e;
+  e.now = 7000000000LL;
+  AudioPump p(e.ops(), cfg(), e.clk());
+  EXPECT_EQ(p.snapshot().epoch_ns, 7000000000LL);
+  p.request_reset();
+  e.now = 9000000000LL;
+  std::vector<float> in(256);
+  p.on_input(in.data(), 256);
+  EXPECT_EQ(p.snapshot().epoch_ns, 9000000000LL);
 }

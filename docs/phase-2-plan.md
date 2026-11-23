@@ -30,3 +30,15 @@ Android first, iOS after. Tests first; an ADR for anything new; PRs only when CI
 4. On-device bench mode: worst hop, latency, xruns, with and without the denormal guard.
 
 Sequence and open questions: ADR 0009. The measurements listed above (worst hop, polling power, worker latency and queue depth) are taken with the bench mode on the real phone.
+
+## Device results (Kelechi, Infinix Note 30, Android 14)
+
+**First device sanity result (2026-11-23, PR 3 debug APK, Bluetooth off, drone off and never toggled).** A 440 Hz tone played from another device through the air into the phone's microphone: the meter read A4 at +0.1, -0.1 and +0.0 cents. So the whole path (Oboe capture with the Unprocessed preset, `libintono`, ffigen bindings, vsync polling) works end to end, and the accuracy through speaker, air and microphone is within +-0.1 cents for a pure tone. Humming was not detected because the voice was below the 180 Hz search floor (`min_hz`), as designed.
+
+Stats over 6233 hops (about 33 s): hop time median 147.5 us, p99 344.1 us, max 1514.4 us (the hop budget at 48 kHz is 5333 us, so the median is under 3% of it); callback max 1516.2 us; "input gaps" 353 (about 10 per second); output xruns 0. Debug build, JIT Dart, mid-range phone: these are not final numbers.
+
+Findings and what was done about them (PR 5, first slice):
+
+1. **Input gaps without the drone.** The count was a wall-clock test (a callback later than 1.5 periods), which in shared mode mostly counts bursts, not lost audio. A gap is now defined by the stream: a discontinuity of the AAudio frames-read counter, with the time and size of each logged. Three counts are reported side by side: late callbacks (the old test, renamed), position gaps with frames lost, and the stream's own overrun count. Which of them is real on this phone is for the next device run to say. See ADR 0009 Note 2.
+2. **Stats panel not live.** It was read once at Start, when no hop had run. It now refreshes twice a second while running.
+3. **Hop maximum 1514 us against a median of 147 us.** Every hop slower than 1 ms is logged with its time (CLOCK_MONOTONIC seconds), and the app logs UI frames over 20 ms in the same clock, so a slow hop can be matched to UI work. CI now also builds an arm64 profile APK (`intono-flutter-profile-apk`), which runs Dart ahead-of-time like a release build: the next run should use it to see whether the spike remains.

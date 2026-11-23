@@ -11,6 +11,7 @@ class FakeAudio implements AudioControl {
   bool? drone;
   bool headphones = false;
   int pointer = 4242;
+  String infoText = 'input: AAudio, Exclusive, 48000 Hz';
 
   @override
   Future<bool> start() async => started = startResult;
@@ -31,7 +32,7 @@ class FakeAudio implements AudioControl {
   Future<bool> headphonesConnected() async => headphones;
 
   @override
-  Future<String> info() async => started ? 'input: AAudio, Exclusive, 48000 Hz' : 'stopped';
+  Future<String> info() async => started ? infoText : 'stopped';
 
   @override
   Future<String> lastError() async => started ? '' : 'no microphone permission';
@@ -123,5 +124,42 @@ void main() {
     await tester.pump();
     expect(audio.started, isFalse);
     expect(find.text('Start'), findsOneWidget);
+  });
+
+  testWidgets('the stream facts refresh twice a second while running, and stop refreshing after Stop', (tester) async {
+    final audio = FakeAudio()..infoText = 'hops 1';
+    await tester.pumpWidget(host(DebugScreen(audio: audio, engineFactory: (_) => FakeEngine())));
+    await tester.tap(find.text('Start'));
+    await tester.pump();
+    await tester.pump();
+    expect(find.text('hops 1'), findsOneWidget);
+
+    audio.infoText = 'hops 2';
+    await tester.pump(const Duration(milliseconds: 520));
+    await tester.pump();
+    expect(find.text('hops 2'), findsOneWidget);
+
+    audio.infoText = 'hops 3';
+    await tester.pump(const Duration(milliseconds: 520));
+    await tester.pump();
+    expect(find.text('hops 3'), findsOneWidget);
+
+    await tester.tap(find.text('Stop'));
+    await tester.pump();
+    await tester.pump();
+    audio.started = true; // a late timer tick must not resurrect the panel
+    audio.infoText = 'hops 4';
+    await tester.pump(const Duration(seconds: 2));
+    expect(find.text('hops 4'), findsNothing);
+    expect(find.text('stopped'), findsOneWidget);
+  });
+
+  testWidgets('the refresh timer is cancelled when the screen goes away while running', (tester) async {
+    final audio = FakeAudio();
+    await tester.pumpWidget(host(DebugScreen(audio: audio, engineFactory: (_) => FakeEngine())));
+    await tester.tap(find.text('Start'));
+    await tester.pump();
+    await tester.pump();
+    await tester.pumpWidget(host(const SizedBox()));   // a pending periodic timer would fail the test at its end
   });
 }

@@ -1,9 +1,14 @@
+import 'dart:async';
+import 'dart:ui' show FrameTiming, FramePhase;
+
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
 import 'audio_control.dart';
 import 'drone_policy.dart';
 import 'engine_api.dart';
 import 'frame_poller.dart';
+import 'jank_log.dart';
 import 'meter_state.dart';
 import 'meter_view.dart';
 
@@ -30,6 +35,9 @@ class _DebugScreenState extends State<DebugScreen> with TickerProviderStateMixin
   bool _headphones = false;
   String _info = 'stopped';
   final ValueNotifier<MeterState> _meter = ValueNotifier<MeterState>(MeterState.silent);
+  final JankLog _jank = JankLog();
+  Timer? _refresh;
+  bool _timingsAttached = false;
 
   @override
   void initState() {
@@ -54,7 +62,33 @@ class _DebugScreenState extends State<DebugScreen> with TickerProviderStateMixin
     }
   }
 
+  void _onTimings(List<FrameTiming> timings) {
+    for (final t in timings) {
+      _jank.add(t.timestampInMicroseconds(FramePhase.vsyncStart), t.totalSpan.inMicroseconds);
+    }
+  }
+
+  /// The stream facts are live while running: twice a second (the first reading after Start has no hops yet).
+  void _startRefresh() {
+    _refresh?.cancel();
+    _refresh = Timer.periodic(const Duration(milliseconds: 500), (_) async {
+      final info = await widget.audio.info();
+      if (!mounted || !_running) return;
+      setState(() => _info = info);
+    });
+  }
+
+  void _stopRefresh() {
+    _refresh?.cancel();
+    _refresh = null;
+    if (_timingsAttached) {
+      SchedulerBinding.instance.removeTimingsCallback(_onTimings);
+      _timingsAttached = false;
+    }
+  }
+
   void _teardownPolling() {
+    _stopRefresh();
     _controller?.meter.removeListener(_forward);
     _controller?.dispose();
     _controller = null;
@@ -85,6 +119,9 @@ class _DebugScreenState extends State<DebugScreen> with TickerProviderStateMixin
     _engine = widget.engineFactory(pointer);
     _controller = PollingController(vsync: this, engine: _engine!)..meter.addListener(_forward);
     _controller!.start();
+    _jank.clear();
+    SchedulerBinding.instance.addTimingsCallback(_onTimings);
+    _timingsAttached = true;
     _headphones = headphones;
     final drone = DronePolicy.decide(_userDrone, _headphones);
     if (drone.play) await widget.audio.setDrone(true);
@@ -95,6 +132,7 @@ class _DebugScreenState extends State<DebugScreen> with TickerProviderStateMixin
       _busy = false;
       _info = info;
     });
+    _startRefresh();
   }
 
   Future<void> _stop() async {
@@ -150,7 +188,7 @@ class _DebugScreenState extends State<DebugScreen> with TickerProviderStateMixin
                 _Button(label: 'Drone: ${drone.play ? 'on' : 'off'}', onTap: _toggleDrone),
                 if (drone.warnSpeaker) const Padding(padding: EdgeInsets.only(top: 8), child: Text(DronePolicy.speakerWarning)),
                 const SizedBox(height: 16),
-                GestureDetector(onTap: _refreshInfo, child: Text(_info)),
+                GestureDetector(onTap: _refreshInfo, child: Text(_jank.text.isEmpty ? _info : '$_info\n${_jank.text}')),
               ],
             ),
             ),
