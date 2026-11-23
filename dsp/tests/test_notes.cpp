@@ -486,7 +486,13 @@ TEST(EngineNotes, ArgumentChecksAndRingNeverBlocks) {
     x.insert(x.end(), n.begin(), n.end());
     x.insert(x.end(), 7200, 0.f);
   }
-  for (size_t p = 0; p < x.size(); p += 512) intono_process(e, x.data() + p, static_cast<int>(std::min<size_t>(512, x.size() - p)));
+  // This test feeds ~6 s of audio far faster than real time. Threaded, a slow worker (a shared macOS VM) would overflow the 1024-hop
+  // record queue and drop hops, which is a different thing from the 64-entry note ring this test is about. So wait for the worker after
+  // every chunk (drain is a no-op in inline mode); the note ring is still never read and still has to drop the newest.
+  for (size_t p = 0; p < x.size(); p += 512) {
+    intono_process(e, x.data() + p, static_cast<int>(std::min<size_t>(512, x.size() - p)));
+    intono_internal::drain(e);
+  }
   int total = 0, got;
   while ((got = testutil::read_notes(e, buf, 4)) > 0) total += got;
   EXPECT_EQ(total, 64);
