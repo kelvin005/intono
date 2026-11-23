@@ -63,7 +63,8 @@ void main() {
     engine.queuedFrames.add(frame(midi: 69, cents: 3.04));
     await tester.pump(const Duration(milliseconds: 16));
     await tester.pump(const Duration(milliseconds: 16));
-    expect(find.text('A4  +3.0'), findsOneWidget);
+    expect(find.text('A4'), findsOneWidget);
+    expect(find.text('+3.0'), findsOneWidget);
     expect(find.text('Stop'), findsOneWidget);
 
     await tester.tap(find.text('Stop'));
