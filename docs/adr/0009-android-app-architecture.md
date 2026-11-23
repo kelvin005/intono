@@ -1,6 +1,6 @@
 # ADR 0009: Android app architecture for Phase 2 (audio shim, Flutter FFI, bench mode, CI)
 
-Status: **Proposed** (2026-11-23). Needs Kelechi's explicit "merge" (it adds dependencies and decides architecture). No code for these decisions is merged before then.
+Status: **Accepted** (Kelechi, 2026-11-23: PR #3 merged, open questions answered below). Amendments by ADR only.
 
 ## Context
 
@@ -45,7 +45,7 @@ The Flutter app is the only UI. Kotlin is only the platform glue: runtime permis
 
 ### 4. Live-meter screen
 
-One screen: note name, cents (number), a needle, and a start/stop control; a drone selector and tonic come in a later PR, not this one. The needle's range, colours and thresholds are display choices, not DSP gates. Permission denial and "microphone in use elsewhere" are shown as plain states.
+One screen: note name, cents (number), a needle, and a start/stop control; a drone selector and tonic come in a later PR, not this one. **Drone policy (Kelechi, 2026-11-23):** the drone is off by default and is only enabled automatically when headphones are connected (wired, USB or Bluetooth output, detected in Kotlin with `AudioManager` device callbacks and passed to `AudioPump::set_drone_enabled`). If the user turns it on while the output is the phone speaker, it plays and the screen shows a warning, "Use headphones for accurate results". Cancelling the drone's leak into the microphone (notch filtering) is Phase 3. The needle's range, colours and thresholds are display choices, not DSP gates. Permission denial and "microphone in use elsewhere" are shown as plain states.
 
 ### 5. Bench mode (on device)
 
@@ -75,16 +75,15 @@ CI uploads the debug APK as an artifact. Kelechi downloads it from the GitHub Ac
 2. **Oboe streams + JNI + Gradle app + CI `android-app` job**: builds an APK; Kotlin permission and lifecycle; JNI start/stop; emulator-side smoke test of library load only.
 3. **Flutter skeleton + ffigen + CI `app` job**: bindings, polling, fake-engine tests, still no UI beyond a debug text.
 4. **Live meter screen** (note, cents, needle), widget tests.
-5. **Bench mode** + the `INTONO_DENORMAL_GUARD` build option + the report.
+5. **Bench mode** + the `INTONO_DENORMAL_GUARD` build option + the bit-identity CI job against `phase1-complete` + the report.
 6. Phone measurements by Kelechi, recorded in an ADR amendment (device caps for the audio-thread worst hop, W3 and W4 on the phone). Milestone tag `phase2-android-complete` when these pass.
 
-## Open questions for Kelechi
+## Answers (Kelechi, 2026-11-23)
 
-1. **Which phone** is the "low-end" test device (model, Android version, SoC)? The bench numbers and the ADR 0008 follow-ups depend on it.
-2. **Drone feedback**: with the phone's speaker playing the drone and the microphone open, the drone leaks into the pitch input (Unprocessed means no echo cancellation). Assumption: headphones (or a headset) for drone use; without them the drone is off by default. OK?
-3. **App name / application id**: placeholder `com.example.intono` for now.
-4. Is a debug-signed APK sideloaded onto your phone acceptable for Phase 2 (no Play Store, no release signing yet)? Assumed yes.
-5. Reading of the denormal-guard comparison build option above (decision 5).
+1. **Test phone:** not yet stated (the reply carried an unfilled `[MODEL]` / `[VERSION]` template). Needed before the phone measurements (PR 6), not before the code PRs. Open.
+2. **Drone and headphones:** see the drone policy in decision 4 (default off unless headphones; speaker use allowed with a warning; notch filtering in Phase 3).
+3. **App id:** the placeholder `com.example.intono` and a sideloaded debug APK are fine for Phase 2; the final app id is decided before Phase 5.
+4. **Denormal-guard comparison option:** approved. `INTONO_DENORMAL_GUARD` (CMake option, default ON) is added in PR 5 **on the condition that CI proves the default build's output is bit-identical to `phase1-complete`**. The proof: a CI job builds the `phase1-complete` tag and the PR head with the default option and compares the output of `intono-cli` byte for byte (`tools/accuracy/diff_cli.py`) on the synthetic dev corpus (steady tones, scales, vibrato, noisy clips, silence-padded runs, inline and threaded); any difference fails the PR. The comparison library (guard off) ships only in the bench APK.
 
 ## Consequences
 
