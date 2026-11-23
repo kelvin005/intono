@@ -60,7 +60,10 @@ class _MeterViewState extends State<MeterView> {
             ),
           ),
           const SizedBox(height: 8),
-          AspectRatio(aspectRatio: 2, child: Needle(cents: _heldCents, active: s.voiced)),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: AspectRatio(aspectRatio: 2, child: Needle(cents: _heldCents, active: s.voiced)),
+          ),
         ],
       ),
     );

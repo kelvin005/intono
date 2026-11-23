@@ -134,14 +134,15 @@ class _DebugScreenState extends State<DebugScreen> with TickerProviderStateMixin
       child: SafeArea(
         child: DefaultTextStyle(
           style: const TextStyle(color: Color(0xFFE8ECEF), fontSize: 16, decoration: TextDecoration.none),
-          child: Padding(
+          child: SingleChildScrollView(
+            child: Padding(
             padding: const EdgeInsets.all(20),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 ValueListenableBuilder<MeterState>(
                   valueListenable: _meter,
-                  builder: (context, s, _) => MeterView(state: s),
+                  builder: (context, s, _) => Center(child: MeterView(state: s)),
                 ),
                 const SizedBox(height: 16),
                 _Button(label: _running ? 'Stop' : 'Start', onTap: _running ? _stop : _start),
@@ -151,6 +152,7 @@ class _DebugScreenState extends State<DebugScreen> with TickerProviderStateMixin
                 const SizedBox(height: 16),
                 GestureDetector(onTap: _refreshInfo, child: Text(_info)),
               ],
+            ),
             ),
           ),
         ),
