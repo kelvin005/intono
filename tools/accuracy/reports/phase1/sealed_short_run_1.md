@@ -1,0 +1,18 @@
+# Sealed short-run set 1: pre-registration (written before the run)
+
+Registered: 2026-11-22 (Africa/Lagos), before any clip of this set was generated or scored. First sealed set of its kind.
+
+- Seeds: 34001 to 34008 (8 seeds x 30 phrases; about 1400 notes). Dev seeds for this set were 9301 to 9312.
+- sha256 of the seed list "34001,34002,34003,34004,34005,34006,34007,34008": 5068c7584ee40e263bb18b6c91077622e310d6c336c2cd901d0b78dd6136840a
+- Generator: `synth.build_short_run_set(seed, n=30, min_step_c=150.0, vib_prob=0.5)` (sha256 of ref/synth.py 162a48efca0b97ec56c4435991a44102b496410a3b1dd97cf2f33aff7f9862fa): phrases of 5 to 7 legato notes of 100 to 250 ms (first and last note 250 to 400 ms), steps of 1 to 3 semitones in both directions with every centre step >= 150 cents, detune +-30 cents, half the notes with vibrato of +-15 to +-30 cents at 5 to 7 Hz, about a third of the phrases with a 30 to 70 ms bow dropout before a middle note, SNR 20 to 35 dB.
+- Scope: centre steps of at least 150 cents. Steps of 60 to 150 cents next to short notes are the recorded HMM limit (ADR 0004, Known limit and Amendment 4) and are not in this gate.
+- Frozen binary: /tmp/frozen/intono-cli-gate4, sha256 0396631400395a53387d2305dbd91538d09d263a914fcca53a7a0dfda5060a50; sources as in sealed_set_4.md (run_short_runs.py sha256 0ece985764c842b19fed295370748dd7a15def1172f06c388628a0c18b13bd11 before the hash was filled in; the registry line only).
+- Scoring: a truth note is found if the engine reports a note of the same MIDI number starting within 80 ms of its onset (each engine note used once); an extra note is an engine note matching no truth note.
+- Gates (Kelechi, 2026-11-22): recall >= 0.995 for notes of 150 ms and more; recall >= 0.98 for notes of 100 to 150 ms; at most 1 extra note per 200 truth notes.
+- Protocol: one run, `python3 -I run_short_runs.py --sealed sr1 --cli /tmp/frozen/intono-cli-gate4`; the script refuses a second run. Reported as measured. If a gate fails: no tuning against this set; fix on dev seeds and register a new set; this one is never reused.
+
+## Addendum (2026-11-22 21:50, before any run): approvals, informational set, runner change
+
+- Kelechi approved the gate scope (centre steps >= 150 cents) and asked for the 100-150 cent band to be reported as informational (measured, no gate). The gated set has no step under 150 cents by construction, so that band cannot come from the same clips. It is a second set run once with the same frozen binary: **sr1info**, seeds 34101 to 34108, `build_short_run_set(seed, n=30, min_step_c=100.0, vib_prob=0.5)`, sha256 of "34101,...,34108" d0301ff2a0ae94da89ac43656cba03403fbbc7662ae8b6d05aeb7b9141e6e8b1. No gate; recall is reported by the smaller adjacent centre step (100 to 130, 130 to 150, 150 and over cents) and by note duration. Run command: `python3 -I run_short_runs.py --sealed sr1info --cli /tmp/frozen/intono-cli-gate4`.
+- Runner change since the first version of this file: `run_short_runs.py` gained per-set `min_step`/`gated` entries and the informational report. The gated path and its gates are unchanged. sha256 now 83fc1ab048b10f7c12978ff497615ac9fb81f2b531bd84b1b1fe788d175eb014. The engine binary and `notes_hmm.hpp` are unchanged (sha256 0396631400395a53387d2305dbd91538d09d263a914fcca53a7a0dfda5060a50 and e34cd7774de802443258be5df7c22bbd5e479eb1427e5ef527adca100fdc7d25).
+- Test added before the run (test_notes.cpp, no engine change): an 80 to 90 ms real note inside a fast run must survive the glitch rule. Result: 140 of 144 cases pass; the 4 failures are all one step pattern, recorded as a known limit in ADR 0004 (see there). 75 tests pass, 1 disabled.

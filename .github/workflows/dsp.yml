@@ -1,0 +1,128 @@
+name: dsp
+on:
+  push:
+    paths: ["dsp/**", "tools/accuracy/**", ".github/workflows/dsp.yml"]
+  pull_request:
+    paths: ["dsp/**", "tools/accuracy/**", ".github/workflows/dsp.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        sanitizer: [none, address, thread]
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build cmake
+      - run: cmake -S dsp -B build -G Ninja -DINTONO_SANITIZE=${{ matrix.sanitizer }}
+      - run: cmake --build build
+      - run: ctest --test-dir build --output-on-failure   # includes the real-time safety test when sanitizer=none
+
+  accuracy-gate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build cmake libsndfile1
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install numpy scipy librosa mir_eval soundfile
+      - run: cmake -S dsp -B build -G Ninja -DINTONO_BUILD_TESTS=OFF && cmake --build build
+      # Fails if a target is missed or any metric regresses by more than 0.5 pp / 0.5 c against Phase 0.
+      - run: python tools/accuracy/run_cpp.py --cli build/intono-cli
+      - uses: actions/upload-artifact@v4
+        with: { name: accuracy-report, path: tools/accuracy/reports/phase1 }
+
+  # Real arm64 silicon (Apple M-series): runs the whole unit-test suite with the NEON pffft path and the ARM memory
+  # model. The real-time safety test is Linux-only (link-time malloc wrapping) and is skipped by CMake here.
+  test-macos-arm64:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install ninja
+      - run: cmake -S dsp -B build -G Ninja -DINTONO_SANITIZE=none
+      - run: cmake --build build
+      - run: ctest --test-dir build --output-on-failure
+
+  # libintono.so for Android, built with the NDK that ships on the runner image (no third-party action).
+  # Checks that matter for Flutter's FFI: only the 8 intono_* functions are exported, nothing needs
+  # libc++_shared.so, and every LOAD segment is 16 KB aligned (Google Play requirement for Android 15+).
+  android:
+    runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a, x86_64]
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Locate the NDK
+        run: |
+          NDK="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
+          test -f "$NDK/build/cmake/android.toolchain.cmake" || { echo "no NDK on this runner image"; exit 1; }
+          echo "NDK=$NDK" >> "$GITHUB_ENV"
+          grep Pkg.Revision "$NDK/source.properties"
+      - name: Build
+        run: |
+          cmake -S dsp -B build -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="$NDK/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=${{ matrix.abi }} -DANDROID_PLATFORM=android-24 -DANDROID_STL=c++_static \
+            -DANDROID_ARM_NEON=ON -DCMAKE_BUILD_TYPE=Release \
+            -DINTONO_SHARED=ON -DINTONO_BUILD_TESTS=OFF -DINTONO_BUILD_CLI=OFF
+          cmake --build build
+      - name: Check the library
+        run: |
+          BIN="$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          SO=build/libintono.so
+          test -f "$SO"
+          "$BIN/llvm-nm" -D --defined-only "$SO" | awk '$2=="T"{print $3}' | sort > exported.txt
+          cat exported.txt
+          printf '%s\n' intono_create intono_destroy intono_drone_render intono_drone_set intono_process \
+            intono_read_frames intono_read_notes intono_set_tonic | sort > expected.txt
+          diff expected.txt exported.txt
+          if "$BIN/llvm-readelf" -d "$SO" | grep -q 'libc++_shared'; then echo "links libc++_shared.so"; exit 1; fi
+          "$BIN/llvm-readelf" -lW "$SO" | awk '$1=="LOAD"{print $NF}' | while read a; do
+            [ $((a)) -ge 16384 ] || { echo "LOAD segment aligned to $a, need 0x4000"; exit 1; }
+          done
+          ls -l "$SO"
+      - uses: actions/upload-artifact@v4
+        with: { name: "libintono-android-${{ matrix.abi }}", path: build/libintono.so }
+
+  # Static libraries for iOS device and simulator, merged with pffft and packaged as an xcframework for the Flutter plugin.
+  ios:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install ninja
+      - name: Build device and simulator slices
+        run: |
+          build() {  # name sdk archs
+            cmake -S dsp -B "build/$1" -G Ninja \
+              -DCMAKE_SYSTEM_NAME=iOS -DCMAKE_OSX_SYSROOT="$2" -DCMAKE_OSX_ARCHITECTURES="$3" \
+              -DCMAKE_OSX_DEPLOYMENT_TARGET=13.0 -DCMAKE_BUILD_TYPE=Release \
+              -DCMAKE_TRY_COMPILE_TARGET_TYPE=STATIC_LIBRARY \
+              -DINTONO_BUILD_TESTS=OFF -DINTONO_BUILD_CLI=OFF
+            cmake --build "build/$1"
+            libtool -static -o "build/$1/libintono_all.a" "build/$1/libintono.a" "build/$1/libpffft.a"
+          }
+          build ios-device iphoneos "arm64"
+          build ios-sim iphonesimulator "arm64;x86_64"
+      - name: Check the slices
+        run: |
+          lipo -info build/ios-device/libintono_all.a build/ios-sim/libintono_all.a
+          for lib in build/ios-device/libintono_all.a build/ios-sim/libintono_all.a; do
+            n=$(nm -gU "$lib" 2>/dev/null | grep -c ' T _intono_')
+            echo "$lib exports $n intono_ functions"
+            [ "$n" -ge 8 ] || exit 1
+          done
+          mkdir x && cd x && ar x ../build/ios-device/libintono.a && xcrun vtool -show-build engine.cpp.o | tee ../platform.txt
+          grep -q 'platform IOS$' ../platform.txt
+      - name: xcframework
+        run: |
+          xcodebuild -create-xcframework \
+            -library build/ios-device/libintono_all.a -headers dsp/include \
+            -library build/ios-sim/libintono_all.a -headers dsp/include \
+            -output build/intono.xcframework
+      - uses: actions/upload-artifact@v4
+        with: { name: intono-xcframework, path: build/intono.xcframework }
+
+# Still to do: run the public datasets (URMP, NSynth) in the accuracy gate, and run the unit tests on an
+# Android emulator and an iOS simulator (needs a third-party emulator action, so an ADR first).

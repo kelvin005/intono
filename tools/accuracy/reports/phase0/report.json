@@ -1,0 +1,290 @@
+{
+  "config": {
+    "sample_rate": 48000.0,
+    "window_size": 1024,
+    "hop_size": 256,
+    "min_hz": 180.0,
+    "max_hz": 3200.0,
+    "threshold": 0.12,
+    "hp_hz": 150.0,
+    "lp_hz": 4000.0,
+    "gate_learn_s": 0.5,
+    "gate_open_db": 10.0,
+    "use_gate": true,
+    "octave_conf": 0.9,
+    "octave_frames": 3,
+    "contour_s": 0.25,
+    "centre_default_s": 0.15,
+    "centre_method": "extrema",
+    "vib_min_swing_c": 8.0
+  },
+  "n_clips": 136,
+  "detectors": {
+    "yin": {
+      "overall": {
+        "raw_pitch_accuracy_pct": 100.0,
+        "gross_error_pct": 0.0,
+        "octave_error_pct": 0.0,
+        "voicing_recall_pct": 100.0,
+        "cents_mae_frame_stable": 0.6876587529688466,
+        "cents_p95_frame_stable": 2.648781748317734,
+        "cents_mae_centre_stable": 0.6372104734073278,
+        "cents_mae_centre_vibrato": 0.6469058597110361,
+        "voicing_false_alarm_pct": 0.0,
+        "python_ms_per_hop": 0.0788015273575932,
+        "gate_cents_mae_stable": 0.6372104734073278,
+        "gate_pass": true
+      },
+      "by_condition": {
+        "sine": {
+          "raw_pitch_accuracy_pct": 100.0,
+          "gross_error_pct": 0.0,
+          "octave_error_pct": 0.0,
+          "voicing_recall_pct": 100.0,
+          "cents_mae_frame_stable": 0.5292579887859106,
+          "cents_p95_frame_stable": 2.5867437660267094,
+          "cents_mae_centre_stable": 0.5291454647116246,
+          "cents_mae_centre_vibrato": NaN,
+          "voicing_false_alarm_pct": 0.0
+        },
+        "saw": {
+          "raw_pitch_accuracy_pct": 100.0,
+          "gross_error_pct": 0.0,
+          "octave_error_pct": 0.0,
+          "voicing_recall_pct": 100.0,
+          "cents_mae_frame_stable": 0.5179198164099611,
+          "cents_p95_frame_stable": 2.4447941627841,
+          "cents_mae_centre_stable": 0.5188935697400698,
+          "cents_mae_centre_vibrato": NaN,
+          "voicing_false_alarm_pct": 0.0
+        },
+        "violin": {
+          "raw_pitch_accuracy_pct": 100.0,
+          "gross_error_pct": 0.0,
+          "octave_error_pct": 0.0,
+          "voicing_recall_pct": 100.0,
+          "cents_mae_frame_stable": 0.5051133051107163,
+          "cents_p95_frame_stable": 2.595555766585356,
+          "cents_mae_centre_stable": 0.4990103650816818,
+          "cents_mae_centre_vibrato": NaN,
+          "voicing_false_alarm_pct": 0.0
+        },
+        "violin_vib": {
+          "raw_pitch_accuracy_pct": 100.0,
+          "gross_error_pct": 0.0,
+          "octave_error_pct": 0.0,
+          "voicing_recall_pct": 100.0,
+          "cents_mae_frame_stable": NaN,
+          "cents_p95_frame_stable": NaN,
+          "cents_mae_centre_stable": NaN,
+          "cents_mae_centre_vibrato": 0.5506556401220718,
+          "voicing_false_alarm_pct": 0.0
+        },
+        "violin_snr30": {
+          "raw_pitch_accuracy_pct": 100.0,
+          "gross_error_pct": 0.0,
+          "octave_error_pct": 0.0,
+          "voicing_recall_pct": 100.0,
+          "cents_mae_frame_stable": 0.45402806563473386,
+          "cents_p95_frame_stable": 2.5793810271610207,
+          "cents_mae_centre_stable": 0.4395050106185815,
+          "cents_mae_centre_vibrato": NaN,
+          "voicing_false_alarm_pct": 0.0
+        },
+        "violin_snr20": {
+          "raw_pitch_accuracy_pct": 100.0,
+          "gross_error_pct": 0.0,
+          "octave_error_pct": 0.0,
+          "voicing_recall_pct": 100.0,
+          "cents_mae_frame_stable": 0.7090196448107735,
+          "cents_p95_frame_stable": 2.603761652652126,
+          "cents_mae_centre_stable": 0.6489515457002656,
+          "cents_mae_centre_vibrato": NaN,
+          "voicing_false_alarm_pct": 0.0
+        },
+        "violin_snr10": {
+          "raw_pitch_accuracy_pct": 100.0,
+          "gross_error_pct": 0.0,
+          "octave_error_pct": 0.0,
+          "voicing_recall_pct": 100.0,
+          "cents_mae_frame_stable": 1.4106136970609853,
+          "cents_p95_frame_stable": 4.195769698492507,
+          "cents_mae_centre_stable": 1.1877568845917439,
+          "cents_mae_centre_vibrato": NaN,
+          "voicing_false_alarm_pct": 0.0
+        },
+        "violin_vib_snr20": {
+          "raw_pitch_accuracy_pct": 100.0,
+          "gross_error_pct": 0.0,
+          "octave_error_pct": 0.0,
+          "voicing_recall_pct": 100.0,
+          "cents_mae_frame_stable": NaN,
+          "cents_p95_frame_stable": NaN,
+          "cents_mae_centre_stable": NaN,
+          "cents_mae_centre_vibrato": 0.7431560792999999,
+          "voicing_false_alarm_pct": 0.0
+        }
+      },
+      "worst_gross_clips": [
+        [
+          "m55_sine",
+          0,
+          195
+        ],
+        [
+          "m55_saw",
+          0,
+          195
+        ],
+        [
+          "m55_violin",
+          0,
+          195
+        ],
+        [
+          "m55_violin_vib",
+          0,
+          195
+        ],
+        [
+          "m55_violin_snr30",
+          0,
+          195
+        ]
+      ]
+    },
+    "pyin": {
+      "overall": {
+        "raw_pitch_accuracy_pct": 100.0,
+        "gross_error_pct": 0.0,
+        "octave_error_pct": 0.0,
+        "voicing_recall_pct": 100.0,
+        "cents_mae_frame_stable": 2.059122755021324,
+        "cents_p95_frame_stable": 6.12989056828498,
+        "cents_mae_centre_stable": 2.007139358884391,
+        "cents_mae_centre_vibrato": 1.0223568562883605,
+        "voicing_false_alarm_pct": 2.7271034996276993,
+        "python_ms_per_hop": 5.1047646112044855,
+        "gate_cents_mae_stable": 2.007139358884391,
+        "gate_pass": true
+      },
+      "by_condition": {
+        "sine": {
+          "raw_pitch_accuracy_pct": 100.0,
+          "gross_error_pct": 0.0,
+          "octave_error_pct": 0.0,
+          "voicing_recall_pct": 100.0,
+          "cents_mae_frame_stable": 4.662046220089814,
+          "cents_p95_frame_stable": 13.442449025052651,
+          "cents_mae_centre_stable": 4.560951489393628,
+          "cents_mae_centre_vibrato": NaN,
+          "voicing_false_alarm_pct": 3.5740878629932986
+        },
+        "saw": {
+          "raw_pitch_accuracy_pct": 100.0,
+          "gross_error_pct": 0.0,
+          "octave_error_pct": 0.0,
+          "voicing_recall_pct": 100.0,
+          "cents_mae_frame_stable": 1.714249246936222,
+          "cents_p95_frame_stable": 6.144397619105777,
+          "cents_mae_centre_stable": 1.7515054564763428,
+          "cents_mae_centre_vibrato": NaN,
+          "voicing_false_alarm_pct": 3.8719285182427403
+        },
+        "violin": {
+          "raw_pitch_accuracy_pct": 100.0,
+          "gross_error_pct": 0.0,
+          "octave_error_pct": 0.0,
+          "voicing_recall_pct": 100.0,
+          "cents_mae_frame_stable": 1.417396522447474,
+          "cents_p95_frame_stable": 5.18853132146091,
+          "cents_mae_centre_stable": 1.4658927672884918,
+          "cents_mae_centre_vibrato": NaN,
+          "voicing_false_alarm_pct": 2.0104244229337302
+        },
+        "violin_vib": {
+          "raw_pitch_accuracy_pct": 100.0,
+          "gross_error_pct": 0.0,
+          "octave_error_pct": 0.0,
+          "voicing_recall_pct": 100.0,
+          "cents_mae_frame_stable": NaN,
+          "cents_p95_frame_stable": NaN,
+          "cents_mae_centre_stable": NaN,
+          "cents_mae_centre_vibrato": 0.948080125701737,
+          "voicing_false_alarm_pct": 0.8190618019359642
+        },
+        "violin_snr30": {
+          "raw_pitch_accuracy_pct": 100.0,
+          "gross_error_pct": 0.0,
+          "octave_error_pct": 0.0,
+          "voicing_recall_pct": 100.0,
+          "cents_mae_frame_stable": 1.2250550508213371,
+          "cents_p95_frame_stable": 4.399088682021974,
+          "cents_mae_centre_stable": 1.1664750703911284,
+          "cents_mae_centre_vibrato": NaN,
+          "voicing_false_alarm_pct": 1.8615040953090096
+        },
+        "violin_snr20": {
+          "raw_pitch_accuracy_pct": 100.0,
+          "gross_error_pct": 0.0,
+          "octave_error_pct": 0.0,
+          "voicing_recall_pct": 100.0,
+          "cents_mae_frame_stable": 1.5069416082472398,
+          "cents_p95_frame_stable": 6.12989056828498,
+          "cents_mae_centre_stable": 1.368166468266167,
+          "cents_mae_centre_vibrato": NaN,
+          "voicing_false_alarm_pct": 2.308265078183172
+        },
+        "violin_snr10": {
+          "raw_pitch_accuracy_pct": 100.0,
+          "gross_error_pct": 0.0,
+          "octave_error_pct": 0.0,
+          "voicing_recall_pct": 100.0,
+          "cents_mae_frame_stable": 1.8290478815858577,
+          "cents_p95_frame_stable": 5.970282876931688,
+          "cents_mae_centre_stable": 1.7298449014905886,
+          "cents_mae_centre_vibrato": NaN,
+          "voicing_false_alarm_pct": 2.7550260610573343
+        },
+        "violin_vib_snr20": {
+          "raw_pitch_accuracy_pct": 100.0,
+          "gross_error_pct": 0.0,
+          "octave_error_pct": 0.0,
+          "voicing_recall_pct": 100.0,
+          "cents_mae_frame_stable": NaN,
+          "cents_p95_frame_stable": NaN,
+          "cents_mae_centre_stable": NaN,
+          "cents_mae_centre_vibrato": 1.0966335868749841,
+          "voicing_false_alarm_pct": 4.616530156366344
+        }
+      },
+      "worst_gross_clips": [
+        [
+          "m55_sine",
+          0,
+          195
+        ],
+        [
+          "m55_saw",
+          0,
+          195
+        ],
+        [
+          "m55_violin",
+          0,
+          195
+        ],
+        [
+          "m55_violin_vib",
+          0,
+          195
+        ],
+        [
+          "m55_violin_snr30",
+          0,
+          195
+        ]
+      ]
+    }
+  }
+}

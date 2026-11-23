@@ -1,0 +1,2 @@
+2026-11-22T21:43:58 set=sr1 seeds=[34001, 34002, 34003, 34004, 34005, 34006, 34007, 34008] cli=/tmp/frozen/intono-cli-gate4 recall_ge150=1.0000 recall_100_150=1.0000 extra_per_200=0.0000 pass=True
+2026-11-22T21:44:14 set=sr1info seeds=[34101, 34102, 34103, 34104, 34105, 34106, 34107, 34108] cli=/tmp/frozen/intono-cli-gate4 recall_ge150=0.9849 recall_100_150=0.9000 extra_per_200=2.2331 informational bands=step 100-130:594/45;step 130-150:94/2;step >=150:745/1
