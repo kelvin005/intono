@@ -3,40 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:intono_app/src/audio_control.dart';
 import 'package:intono_app/src/debug_screen.dart';
 
+import 'fake_audio.dart';
 import 'fake_engine.dart';
-
-class FakeAudio implements AudioControl {
-  bool started = false;
-  bool startResult = true;
-  bool? drone;
-  bool headphones = false;
-  int pointer = 4242;
-  String infoText = 'input: AAudio, Exclusive, 48000 Hz';
-
-  @override
-  Future<bool> start() async => started = startResult;
-
-  @override
-  Future<void> stop() async => started = false;
-
-  @override
-  Future<int> enginePointer() async => started ? pointer : 0;
-
-  @override
-  Future<bool> setDrone(bool on, {int midiNote = 57, double gain = 0.3}) async {
-    drone = on;
-    return true;
-  }
-
-  @override
-  Future<bool> headphonesConnected() async => headphones;
-
-  @override
-  Future<String> info() async => started ? infoText : 'stopped';
-
-  @override
-  Future<String> lastError() async => started ? '' : 'no microphone permission';
-}
 
 Widget host(Widget child) => Directionality(textDirection: TextDirection.ltr, child: child);
 
@@ -161,5 +129,25 @@ void main() {
     await tester.pump();
     await tester.pump();
     await tester.pumpWidget(host(const SizedBox()));   // a pending periodic timer would fail the test at its end
+  });
+
+  testWidgets('a long press on the version label stops capture and opens the bench', (tester) async {
+    final audio = FakeAudio();
+    var opened = 0;
+    await tester.pumpWidget(host(DebugScreen(audio: audio, engineFactory: (_) => FakeEngine(), onOpenBench: () => opened++)));
+    await tester.tap(find.text('Start'));
+    await tester.pump();
+    await tester.pump();
+    expect(audio.started, isTrue);
+
+    await tester.tap(find.byKey(const Key('version-label')));   // a tap does nothing
+    await tester.pump();
+    expect(opened, 0);
+
+    await tester.longPress(find.byKey(const Key('version-label')));
+    await tester.pump();
+    await tester.pump();
+    expect(audio.started, isFalse);   // the bench needs the device quiet, and the engine must not outlive the stream
+    expect(opened, 1);
   });
 }
