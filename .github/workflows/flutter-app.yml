@@ -9,10 +9,12 @@ on:
     paths: ["app/**", "dsp/include/intono/intono.h", ".github/workflows/flutter-app.yml"]
 
 jobs:
-  install-check:
+  app:
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build cmake libclang-dev
       - name: Install the pinned Flutter (checksum verified)
         run: |
           V=$(cat app/.flutter-version); SUM=$(cat app/.flutter-sha256)
@@ -20,16 +22,33 @@ jobs:
           echo "$SUM  flutter.tar.xz" | sha256sum -c -
           tar -xf flutter.tar.xz -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
-      - name: Analytics off, version
+          rm flutter.tar.xz
+      - name: Analytics off
         run: |
           flutter config --no-analytics --no-cli-animations
           dart --disable-analytics
           flutter --version
-      - name: Scratch project, to learn the generated Android template and the pub versions
+      - name: Dependencies
+        working-directory: app
         run: |
-          cd "$RUNNER_TEMP" && flutter create --platforms=android --org com.example --project-name intono_app scratch > /dev/null
-          cd scratch && flutter pub add ffi > /dev/null && flutter pub add --dev ffigen > /dev/null
-          grep -E "^  (ffi|ffigen|flutter_lints):" -A0 pubspec.yaml; grep -E "^  (ffi|ffigen|flutter_lints|lints):" -A3 pubspec.lock | grep -E "^  [a-z_]+:|version:"
-          for f in $(find android -type f \( -name "*.kts" -o -name "*.gradle" -o -name "*.properties" -o -name "*.xml" -o -name "*.kt" \) | sort) pubspec.yaml analysis_options.yaml lib/main.dart test/widget_test.dart .gitignore; do
-            echo "=====FILE $f"; cat "$f"; echo "=====END"
-          done
+          if [ -f pubspec.lock ]; then flutter pub get --enforce-lockfile; else flutter pub get; fi
+      - name: Regenerate the FFI bindings and require them to be up to date
+        working-directory: app
+        run: |
+          dart run ffigen --config ffigen.yaml
+          if [ -z "$(git status --porcelain -- lib/src/ffi/intono_bindings.dart pubspec.lock)" ]; then echo "bindings and lockfile are up to date"; exit 0; fi
+          git status --porcelain
+          echo "=====FILE app/lib/src/ffi/intono_bindings.dart"; cat lib/src/ffi/intono_bindings.dart; echo "=====END"
+          echo "=====FILE app/pubspec.lock"; cat pubspec.lock; echo "=====END"
+          exit 1
+      - name: Analyze
+        working-directory: app
+        run: flutter analyze
+      - name: Build libintono for the host (the FFI test loads it)
+        run: |
+          cmake -S dsp -B build-host -G Ninja -DINTONO_SHARED=ON -DINTONO_BUILD_TESTS=OFF -DINTONO_BUILD_CLI=OFF -DCMAKE_BUILD_TYPE=Release
+          cmake --build build-host
+          ls -l build-host/libintono.so
+      - name: Test
+        working-directory: app
+        run: INTONO_LIB="$GITHUB_WORKSPACE/build-host/libintono.so" flutter test
