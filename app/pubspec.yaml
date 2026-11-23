@@ -1,5 +1,5 @@
 name: intono_app
-description: Intono violin intonation trainer. Phase 2 skeleton: engine bindings, vsync polling, debug screen.
+description: "Intono violin intonation trainer. Phase 2 skeleton - engine bindings, vsync polling, debug screen."
 publish_to: none
 version: 0.1.0+1
 
