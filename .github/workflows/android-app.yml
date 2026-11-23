@@ -18,7 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: sudo apt-get update && sudo apt-get install -y ninja-build cmake
-      - run: cmake -S android/shim -B build -G Ninja -DINTONO_SANITIZE=${{ matrix.sanitizer }}
+      - run: cmake -S android/shim -B build -G Ninja -DINTONO_SANITIZE=${{ matrix.sanitizer }} -DINTONO_BENCH_NOGUARD=ON   # the guard-off comparison library builds everywhere; its dlopen test runs in the plain job
       - run: cmake --build build
       - run: ctest --test-dir build --output-on-failure   # sanitizer=none also runs the real-time safety test
 
