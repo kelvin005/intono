@@ -96,6 +96,13 @@ Implementation details found while building PR 2. Decision 2's `c++_static` is t
 - **Streams.** Input: Oboe, `LowLatency`, `Exclusive` requested (the granted mode is reported by `info()`), float, mono, `InputPreset::Unprocessed`, native sample rate; the engine is created with the stream's rate. Output (drone): opened only while the drone plays, same rate, `LowLatency`, `Exclusive` requested, buffer 2 bursts.
 - **CI.** `android-app` builds and unit-tests, then checks the APK; `android-app-emulator` runs an instrumented smoke test (library load, JNI, engine create/process/read/destroy on bionic). Capture itself is not testable on the CI emulator (`-no-audio`) and is first exercised on the phone.
 
+## Note 1 (2026-11-23, with PR 3): Flutter's toolchain, and retiring the harness
+
+Recorded as a note, not an amendment (Kelechi: within the ADR's intent, because Flutter dictates it).
+
+- **Flutter host toolchain.** `app/android` builds with what Flutter 3.50.1 ships: Gradle 9.5.0, Android Gradle plugin 9.3.1, Kotlin 2.4.20 (Flutter's `android.newDsl=false` / `android.builtInKotlin=false` flags). NDK 30.0.16248370, CMake 3.22.1, Oboe 1.9.3, SDK levels and JDK 17 are the same as the harness; the shim sources, Kotlin glue and CMake are shared, not copied. The Flutter app's version pins therefore follow `app/.flutter-version`, not the Amendment 1 list, which applies to the harness.
+- **Retiring the harness.** The harness app (`android/app`, its `MainActivity`, the `android-app` APK job and the harness Gradle toolchain) is removed once the Flutter app reaches parity with it (start/stop capture, drone with the headphone policy, stream facts), at the latest in PR 5, so only one Android toolchain remains. The shared Kotlin glue and the shim move under the Flutter host's tree when that happens; the unused harness `MainActivity` compiled into the Flutter APK goes with it. The instrumented smoke test and the shim host tests move with the shim.
+
 ## Consequences
 
 - New dependencies: Oboe (Google Maven), Flutter SDK and pub packages (`ffi`, `ffigen`, plus the Flutter test SDK), Android Gradle plugin and Kotlin. All pinned, none involves user data.
