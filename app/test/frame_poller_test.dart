@@ -68,7 +68,6 @@ void main() {
     testWidgets('polls once per frame and publishes the newest state', (tester) async {
       final e = FakeEngine();
       final c = PollingController(vsync: tester, engine: e);
-      addTearDown(c.dispose);
       c.start();
       e.queuedFrames.add(frame(cents: 1));
       await tester.pump(const Duration(milliseconds: 16));
@@ -80,24 +79,24 @@ void main() {
       final calls = e.readFramesCalls;
       await tester.pump(const Duration(milliseconds: 16));
       expect(e.readFramesCalls, greaterThan(calls));
+      c.dispose();
     });
 
     testWidgets('notes are polled about every 100 ms, not every frame', (tester) async {
       final e = FakeEngine();
       final c = PollingController(vsync: tester, engine: e);
-      addTearDown(c.dispose);
       c.start();
       for (var i = 0; i < 20; i++) {
         await tester.pump(const Duration(milliseconds: 16));
       }
       expect(e.readNotesCalls, inInclusiveRange(2, 4));
       expect(e.readFramesCalls, greaterThanOrEqualTo(19));
+      c.dispose();
     });
 
     testWidgets('after stop() nothing is polled, and start() resumes', (tester) async {
       final e = FakeEngine();
       final c = PollingController(vsync: tester, engine: e);
-      addTearDown(c.dispose);
       c.start();
       await tester.pump(const Duration(milliseconds: 16));
       await tester.pump(const Duration(milliseconds: 16));
@@ -110,18 +109,19 @@ void main() {
       await tester.pump(const Duration(milliseconds: 16));
       await tester.pump(const Duration(milliseconds: 16));
       expect(e.readFramesCalls, greaterThan(calls));
+      c.dispose();
     });
 
     testWidgets('the ticker is a vsync ticker (it follows the frame clock)', (tester) async {
       final e = FakeEngine();
       final c = PollingController(vsync: tester, engine: e);
-      addTearDown(c.dispose);
       c.start();
       expect(c.isTicking, isTrue);
       expect(SchedulerBinding.instance.hasScheduledFrame, isTrue);
       c.stop();
       expect(c.isTicking, isFalse);
       expect(const SizedBox(), isA<Widget>());
+      c.dispose();
     });
   });
 }
