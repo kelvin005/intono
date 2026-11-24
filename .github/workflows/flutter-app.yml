@@ -4,9 +4,9 @@ name: flutter-app
 on:
   workflow_dispatch:
   push:
-    paths: ["app/**", "dsp/include/intono/intono.h", ".github/workflows/flutter-app.yml"]
+    paths: ["app/**", "android/shim/**", "android/app/src/main/kotlin/**", "dsp/**", ".github/workflows/flutter-app.yml"]
   pull_request:
-    paths: ["app/**", "dsp/include/intono/intono.h", ".github/workflows/flutter-app.yml"]
+    paths: ["app/**", "android/shim/**", "android/app/src/main/kotlin/**", "dsp/**", ".github/workflows/flutter-app.yml"]
 
 jobs:
   app:
