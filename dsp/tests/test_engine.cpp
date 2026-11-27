@@ -209,8 +209,16 @@ TEST(Threads, AudioThreadProducesWhileUiThreadConsumes) {
   intono_engine* e = testutil::make_engine(&c);
   const auto x = testutil::harmonic(48000, 440.0, 10.0);
   std::atomic<bool> done{false};
+  std::atomic<size_t> read{0};
+  // Real capture is paced by the device; this producer is not, so it is held back while more than half the frame ring (1024) is unread.
+  // Without that, a UI thread descheduled for ~200 ms lets the ring fill and frames are dropped by design, which is not what this test
+  // is about (ordering and no loss while both threads run). Ring overflow itself is covered by the Worker and ring tests.
   std::thread audio([&] {
-    for (size_t p = 0; p < x.size(); p += 128) intono_process(e, x.data() + p, static_cast<int>(std::min<size_t>(128, x.size() - p)));
+    for (size_t p = 0; p < x.size(); p += 128) {
+      const size_t produced = p + 128 >= 1024 ? 1 + (p + 128 - 1024) / 256 : 0;
+      while (produced > read.load() + 512) std::this_thread::yield();
+      intono_process(e, x.data() + p, static_cast<int>(std::min<size_t>(128, x.size() - p)));
+    }
     done = true;
   });
   std::vector<intono_frame> buf(32);
@@ -219,8 +227,10 @@ TEST(Threads, AudioThreadProducesWhileUiThreadConsumes) {
   bool ok = true;
   auto drain = [&] {
     int n;
-    while ((n = intono_read_frames(e, buf.data(), 32)) > 0)
+    while ((n = intono_read_frames(e, buf.data(), 32)) > 0) {
       for (int i = 0; i < n; ++i, ++total) { ok &= buf[i].t_sec > last_t; last_t = buf[i].t_sec; }
+      read.store(total);
+    }
   };
   // The UI thread is descheduled for a while (on the 2-vCPU CI emulator this happened for long enough that the unpaced producer
   // filled the 1024-frame ring and frames were dropped, as designed: 1799 of 1872 read, main at a7e258b).
