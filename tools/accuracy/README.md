@@ -34,3 +34,20 @@ pYIN note: librosa's default `resolution=0.1` means 10-cent bins and inflated it
 ## Vibrato centre (ADR 0001)
 
 The doc's autocorrelation method on a 250 ms contour cannot see a 4 Hz vibrato (period 250 ms) and misses the target at 5.75 c. `docs/adr/0001-vibrato-centre-pitch.md` records the decision: peak/trough midpoints with an 8 c minimum swing, averaging over the last full cycle, a 250 ms hold-over, and a 150 ms median fallback. Result 0.65 c (1.03 c at 10 dB SNR), 0% false vibrato on non-vibrato clips. `centre_method` options in `yin_ref.py`: `extrema` (ADR), `extrema_v0` (no safeguards), `autocorr` (doc as written).
+
+## Bit-identity against phase1-complete (ADR 0009 answer 4, Amendment 2)
+
+`golden/phase1-complete.json` holds, for every case of the synthetic dev corpus (all phrase sets of seeds 21, 77, 123, 2024; each clip as
+is and with 3 s of digital silence appended; frames and notes mode), the SHA-256 of the float32 input and of `intono-cli`'s output when
+built from the `phase1-complete` tag. It was made with `golden.py make` on the tag's binary, which refuses to write it unless the inline
+and threaded outputs agree, so one manifest checks both modes.
+
+```
+PYTHONDONTWRITEBYTECODE=1 python golden.py check --cli ../../build/intono-cli --golden golden/phase1-complete.json [--threaded] --jobs 32
+INTONO_CLI=../../build/intono-cli python test_golden.py
+```
+
+`DIFF` is a real output change; run `diff_cli.py --a <tag build> --b <this build>` to see the first differing line. `INPUT DRIFT` means the
+synthetic input changed (numpy/scipy versions: CI pins those in the manifest's `env`), which invalidates the comparison without
+implicating the DSP. The `golden-provenance` job in `dsp.yml` rebuilds the tag and re-checks the manifest weekly, on manual runs, and
+whenever the manifest, `golden.py` or `ref/synth.py` change. The manifest is never regenerated from anything but the tag.

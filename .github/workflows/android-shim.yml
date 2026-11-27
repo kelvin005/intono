@@ -5,20 +5,26 @@ name: android-shim
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths: ["android/shim/**", "dsp/**", ".github/workflows/android-shim.yml"]
   pull_request:
     paths: ["android/shim/**", "dsp/**", ".github/workflows/android-shim.yml"]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   shim-host-tests:
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
         sanitizer: [none, address, thread]
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y ninja-build cmake
+      - run: .github/scripts/apt-install.sh ninja-build cmake
       - run: cmake -S android/shim -B build -G Ninja -DINTONO_SANITIZE=${{ matrix.sanitizer }} -DINTONO_BENCH_NOGUARD=ON   # the guard-off comparison library builds everywhere; its dlopen test runs in the plain job
       - run: cmake --build build
       - run: ctest --test-dir build --output-on-failure   # sanitizer=none also runs the real-time safety test
