@@ -1,0 +1,43 @@
+name: ios-generate
+# TEMPORARY (removed before PR i2 merges): generates app/ios with the pinned Flutter on macos-15 and prints it to the log, because the
+# Claude workspace has no Flutter or Xcode. Also prints the macOS Flutter archive's SHA-256 (to pin it) and the toolchain facts.
+on:
+  pull_request:
+    paths: [".github/workflows/ios-generate.yml"]
+jobs:
+  generate:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pinned Flutter for macOS arm64
+        run: |
+          V=$(cat app/.flutter-version)
+          curl -fsSL --retry 3 "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_${V}-stable.zip" -o flutter.zip
+          echo "FLUTTER_MACOS_ARM64_SHA256 $(shasum -a 256 flutter.zip | cut -d' ' -f1)"
+          unzip -q flutter.zip -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Toolchain facts
+        run: |
+          flutter config --no-analytics --no-cli-animations; dart --disable-analytics
+          flutter --version
+          xcodebuild -version
+          xcrun simctl list runtimes
+          xcrun simctl list devicetypes | grep -i iphone | head -20
+          pod --version || echo "no cocoapods"
+          flutter config --list || true
+      - name: Generate app/ios
+        working-directory: app
+        run: |
+          flutter create --platforms=ios --org com.example --project-name intono_app .
+          git status --porcelain
+          find ios -type f | sort
+      - name: Print app/ios (tar.gz, base64)
+        working-directory: app
+        run: |
+          tar -czf ios.tgz ios
+          shasum -a 256 ios.tgz
+          echo "=====BEGIN IOS TGZ"
+          base64 -b 0 -i ios.tgz | fold -w 4000
+          echo
+          echo "=====END IOS TGZ"
