@@ -1,0 +1,4 @@
+module IntonoNative {
+  header "intono_ios.h"
+  export *
+}
