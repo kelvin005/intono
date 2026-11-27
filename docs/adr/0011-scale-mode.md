@@ -1,9 +1,9 @@
 # ADR 0011: Phase 3 scale mode (scale data, grader, score-informed segmentation, scale screen, finger/string results)
 
-Status: **Proposed** (2026-11-27). Item 1 (scale data) is implemented in the PR that adds this ADR; items 2 to 5 are designed here at the
-level needed to order the work and are filled in by their own PRs. **Not yet checked against the architecture doc's sections "Practising
-without staring", "Coaching" and "Match my A"**: that document is not in the repository, the Project store or Google Drive, so it could
-not be read. Anything below that conflicts with it gives way to it. Needs Kelechi's answers to the questions at the end, then "merge".
+Status: **Accepted** (Kelechi, 2026-11-27; answers below). Item 1 (scale data) is implemented in the PR that adds this ADR; items 2 to 5
+are designed here at the level needed to order the work and are filled in by their own PRs. Checked against `docs/architecture.md`
+("Feature modules", "Scale grading rules", "Coaching", "Practising without staring", "Match my A"); where this ADR differs from the doc,
+the difference and Kelechi's decision are stated below. v1 scope (no accounts, no backend, one-time Pro unlock) is ADR 0012.
 
 ## Context
 
@@ -34,14 +34,23 @@ results, stored locally (input to the heatmap and spoken tips).
 
 - Input: the expected `ScaleDef` and the notes from `intono_read_notes` (`midi_note`, `mean_cents`, `t_start`, `t_end`, `frame_count`,
   confidence), collected while the scale is played. Pure Dart, no audio.
-- **Alignment:** dynamic-programming alignment (edit distance) of the played note sequence to the expected one, with substitution cost
-  from the pitch distance, so a missed note, an extra note (a repeated or slipped note, an octave error, a stray speech note) or a wrong
-  note are each one edit and the rest stays aligned. Same-pitch splits are merged before alignment (Kelechi, deferred from ADR 0004).
-- **Grade per expected note:** 🟢 within ±5 cents, 🟡 within ±15 cents, 🔴 beyond, missed if unaligned. Cents measured against the
-  target in the configured tuning and A4 reference. **Thresholds are configuration, not code** (question 1).
-- **Score %:** the share of expected notes graded 🟢 (question 2 asks whether 🟡 counts half).
-- Tests first, on synthetic note sequences (missed, extra, repeated, octave error, merged, every grade boundary), then on the engine's
-  own output for the synthetic phrase sets.
+- **The grade uses the note's mean pitch, not the live display value** (architecture doc, ADR 0001): `intono_note.mean_cents` against the
+  target in the engine's current tuning and A4 reference. Cents to the expected note when the engine's nearest note differs:
+  `(midi_note - expected) * 100 + mean_cents` (exact in equal temperament; just and Pythagorean need per-degree offsets and come with the
+  tuning-system work).
+- **A note counts when it lasts 150 ms or more** (architecture doc). Shorter notes are not graded: they are dropped before alignment, so
+  a glitch does not shift the grades; an expected note played that short is reported as missed. Configurable (`min_note_ms`); see the
+  question below on short notes.
+- **Alignment:** edit-distance alignment of the played sequence to the expected one, substitution cost from the pitch distance, so a
+  missed note, an extra note (a repeated or slipped note, an octave error, a stray speech note) or a wrong note is one edit and later
+  grades do not shift. Same-pitch splits are merged before alignment (Kelechi, deferred from ADR 0004).
+- **Grade per expected note:** 🟢 within ±5 cents, 🟡 within ±15 cents, 🔴 beyond, or missed (counted as 🔴 in the score).
+- **Score % = (🟢 + 0.5 × 🟡) / expected notes** (Kelechi, 2026-11-27; this replaces the architecture doc's "share of notes within ±10¢").
+  The 🟢 / 🟡 / 🔴 counts are shown next to the %.
+- **Thresholds come from a config file bundled with the app** (v1, no remote-config vendor): `grade_green_cents` 5, `grade_yellow_cents`
+  15, `min_note_ms` 150, read through one interface so a different source could replace it later without touching the grader.
+- Tests first, on synthetic note sequences (missed, extra, repeated, octave error, merged, short, every grade boundary), then on the
+  engine's own output for the synthetic phrase sets.
 
 ### 3. Score-informed segmentation (the hard gate)
 
@@ -53,25 +62,33 @@ results, stored locally (input to the heatmap and spoken tips).
 
 ### 4. Scale screen
 
-Choose a scale → **glance view** while playing (the whole screen one colour: the grade of the current note, readable from the music
-stand without reading text) → results: every note coloured, the score, "play again". Exact behaviour follows "Practising without
-staring" once read.
+Choose a scale → **glance view** while playing (the whole screen green, yellow or red: the grade of the note just finished, read in
+peripheral vision from the music stand) → results ("play, then review"): every note coloured, the score with the 🟢/🟡/🔴 counts, "play
+again". The architecture doc's "tap-to-replay of the student's own audio" is **not** in this item: it means keeping the run's audio on the
+device, which the standing rule ("never log or upload audio") does not cover yet (question 2).
 
 ### 5. Finger/string results, stored locally
 
 Each graded note keeps its string and finger from the scale data, so a session's results become per-(string, finger, placement)
-statistics stored on the device (never audio). They feed the heatmap and spoken tips ("Coaching"). Storage format and retention in the
-item 5 PR.
+statistics stored on the device (never audio), in the doc's local database (SQLite via drift; `sessions` and `note_stats`, with
+`string`, `finger` and `placement` added so the heatmap is per finger, as "Coaching" asks). They feed the finger-level heatmap and the
+templated tips, which come after item 5. No outbox or sync tables (ADR 0012).
 
-## Questions for Kelechi
+## Answers (Kelechi, 2026-11-27)
 
-1. **Remote config for the grade thresholds:** which service? There is no backend in the repository yet (no `openapi.yaml` on `main`),
-   and a remote-config service is a new vendor (standing rule: ADR and your choice first). Proposal until then: thresholds in a bundled
-   config file with the same keys, read through one interface, so the remote source can be swapped in without touching the grader.
-2. **Score %:** 🟢 only, or 🟢 = 1 and 🟡 = 0.5?
-3. **Fingering choice:** open strings rather than 4th fingers (as generated). Some teachers prefer 4th fingers in scales from the start
-   (e.g. a fourth-finger D on the G string). Keep open strings for the beginner set?
-4. **The architecture doc:** please add it to the Project (or paste the three sections), so items 2, 4 and 5 can be checked against it.
+1. **Thresholds:** no remote-config vendor; a config file bundled in the app for v1.
+2. **Score:** 🟢 = 1, 🟡 = 0.5, 🔴 = 0; the green/yellow/red counts are shown next to the %.
+3. **Fingering:** open strings by default (standard for beginners); 4th-finger variants can be an option later.
+4. **Architecture doc:** in the repository as `docs/architecture.md` (#27). Its Backend, Sync and App-Store-subscription sections are
+   outdated (ADR 0012).
+
+## Open questions (raised by reading the doc)
+
+1. **Short notes and the 150 ms rule:** the hard Phase 3 gate is about notes of 100 to 250 ms, and fast scales have semiquavers near
+   150 ms. With `min_note_ms` 150 a correctly played 120 ms note is "missed". Keep 150 ms for v1, or lower it (for example to 80 ms, just
+   above the ADR 0004 glitch rule's 12 frames = 64 ms)?
+2. **Replay of the student's own audio** ("Play, then review"): it needs the run's audio kept on the phone until the review ends
+   (never uploaded, deleted after). That is a change to the standing rule and its own ADR. Wanted for v1?
 
 ## Consequences
 
