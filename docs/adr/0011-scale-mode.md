@@ -38,17 +38,22 @@ results, stored locally (input to the heatmap and spoken tips).
   target in the engine's current tuning and A4 reference. Cents to the expected note when the engine's nearest note differs:
   `(midi_note - expected) * 100 + mean_cents` (exact in equal temperament; just and Pythagorean need per-degree offsets and come with the
   tuning-system work).
-- **A note counts when it lasts 150 ms or more** (architecture doc). Shorter notes are not graded: they are dropped before alignment, so
-  a glitch does not shift the grades; an expected note played that short is reported as missed. Configurable (`min_note_ms`); see the
-  question below on short notes.
+- **A note counts when it lasts 80 ms or more** (Kelechi, 2026-11-27; this replaces the architecture doc's 150 ms, which marked fast
+  semiquavers of about 120 ms as missed). 80 ms sits just above the ADR 0004 glitch rule's 12 frames (64 ms). Shorter notes are not
+  graded: they are dropped before alignment, so a glitch does not shift the grades; an expected note played that short is reported as
+  missed. `min_note_ms` in the config.
 - **Alignment:** edit-distance alignment of the played sequence to the expected one, substitution cost from the pitch distance, so a
   missed note, an extra note (a repeated or slipped note, an octave error, a stray speech note) or a wrong note is one edit and later
-  grades do not shift. Same-pitch splits are merged before alignment (Kelechi, deferred from ADR 0004).
+  grades do not shift. Same-pitch splits are merged before alignment (Kelechi, deferred from ADR 0004): consecutive notes with the same
+  MIDI number, a gap of at most `merge_gap_ms` (120) **and** mean pitches within `merge_max_cents_diff` (25) of each other. The pitch
+  condition was added with the grader: without it, a note played 60 cents sharp (an F#4 that the engine names G4 -40) merged into the
+  G4 that followed it.
 - **Grade per expected note:** 🟢 within ±5 cents, 🟡 within ±15 cents, 🔴 beyond, or missed (counted as 🔴 in the score).
 - **Score % = (🟢 + 0.5 × 🟡) / expected notes** (Kelechi, 2026-11-27; this replaces the architecture doc's "share of notes within ±10¢").
   The 🟢 / 🟡 / 🔴 counts are shown next to the %.
-- **Thresholds come from a config file bundled with the app** (v1, no remote-config vendor): `grade_green_cents` 5, `grade_yellow_cents`
-  15, `min_note_ms` 150, read through one interface so a different source could replace it later without touching the grader.
+- **Thresholds come from a config file bundled with the app** (v1, no remote-config vendor), `app/assets/config/grading.json`:
+  `grade_green_cents` 5, `grade_yellow_cents` 15, `min_note_ms` 80, `merge_gap_ms` 120, `merge_max_cents_diff` 25, read through one
+  interface (`GradingConfigSource`) so a different source could replace it later without touching the grader.
 - Tests first, on synthetic note sequences (missed, extra, repeated, octave error, merged, short, every grade boundary), then on the
   engine's own output for the synthetic phrase sets.
 
@@ -65,7 +70,7 @@ results, stored locally (input to the heatmap and spoken tips).
 Choose a scale → **glance view** while playing (the whole screen green, yellow or red: the grade of the note just finished, read in
 peripheral vision from the music stand) → results ("play, then review"): every note coloured, the score with the 🟢/🟡/🔴 counts, "play
 again". The architecture doc's "tap-to-replay of the student's own audio" is **not** in this item: it means keeping the run's audio on the
-device, which the standing rule ("never log or upload audio") does not cover yet (question 2).
+device; it is in v1, RAM only, per ADR 0013, and comes with the review screen.
 
 ### 5. Finger/string results, stored locally
 
@@ -82,13 +87,11 @@ templated tips, which come after item 5. No outbox or sync tables (ADR 0012).
 4. **Architecture doc:** in the repository as `docs/architecture.md` (#27). Its Backend, Sync and App-Store-subscription sections are
    outdated (ADR 0012).
 
-## Open questions (raised by reading the doc)
+## Answers to the questions raised by reading the doc (Kelechi, 2026-11-27)
 
-1. **Short notes and the 150 ms rule:** the hard Phase 3 gate is about notes of 100 to 250 ms, and fast scales have semiquavers near
-   150 ms. With `min_note_ms` 150 a correctly played 120 ms note is "missed". Keep 150 ms for v1, or lower it (for example to 80 ms, just
-   above the ADR 0004 glitch rule's 12 frames = 64 ms)?
-2. **Replay of the student's own audio** ("Play, then review"): it needs the run's audio kept on the phone until the review ends
-   (never uploaded, deleted after). That is a change to the standing rule and its own ADR. Wanted for v1?
+1. **Minimum graded note: 80 ms**, not 150 ms, so fast scales are not marked missed; the 120 ms semiquaver case is a test.
+2. **Replay of the student's own audio: yes in v1, in RAM only** (at most the last 60 s of the run, discarded when the review screen
+   closes, never written to disk or uploaded). Designed in its own ADR (0013); the rule "never log or upload audio" stays true.
 
 ## Consequences
 
