@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12+ (API 31+). ADR 0012 / ADR 0015: the practice database is in cloud backup and device transfer; nothing else of the app
+     is (no audio is ever written). The file is named so a later exclusion rule cannot drop it silently. -->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="database" path="intono.sqlite" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="database" path="intono.sqlite" />
+    </device-transfer>
+</data-extraction-rules>

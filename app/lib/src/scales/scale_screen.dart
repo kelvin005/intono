@@ -40,6 +40,7 @@ class ScaleScreen extends StatefulWidget {
     required this.library,
     required this.config,
     required this.onClose,
+    this.onRunFinished,
   });
 
   final AudioControl audio;
@@ -47,6 +48,10 @@ class ScaleScreen extends StatefulWidget {
   final ScaleLibrary library;
   final GradingConfig config;
   final VoidCallback onClose;
+
+  /// A finished run (the last note played, Stop, or the app leaving the foreground), for the practice history (ADR 0015). Called once
+  /// per run; the store skips a run with no played note. Null: nothing is stored.
+  final Future<void> Function(ScaleResult result, DateTime startedAt, DateTime endedAt)? onRunFinished;
 
   @override
   State<ScaleScreen> createState() => _ScaleScreenState();
@@ -60,7 +65,9 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
   PollingController? _poll;
   EngineApi? _engine;
   String _error = '';
+  String _saveError = '';
   bool _starting = false;
+  DateTime _runStarted = DateTime.now();
 
   @override
   void initState() {
@@ -115,6 +122,8 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
       _scale = s;
       _run = run;
       _result = null;
+      _saveError = '';
+      _runStarted = DateTime.now();
       _phase = _Phase.run;
     });
   }
@@ -132,10 +141,22 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
   void _finish() {
     if (_phase != _Phase.run) return;
     _stopCapture();
+    final result = _run!.result();
     setState(() {
-      _result = _run!.result();
+      _result = result;
       _phase = _Phase.results;
     });
+    _save(result, _runStarted, DateTime.now());
+  }
+
+  Future<void> _save(ScaleResult r, DateTime started, DateTime ended) async {
+    final save = widget.onRunFinished;
+    if (save == null) return;
+    try {
+      await save(r, started, ended);
+    } catch (_) {
+      if (mounted) setState(() => _saveError = 'This run could not be saved to your history.');
+    }
   }
 
   @override
@@ -226,6 +247,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
               ],
             ),
             if (r.extras.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text('${r.extras.length} extra notes')),
+            if (_saveError.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_saveError)),
             const SizedBox(height: 20),
             AppButton(label: 'Play again', onTap: () => _start(r.scale)),
             const SizedBox(height: 12),

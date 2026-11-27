@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 11 and older (API 24-30). The same rule as data_extraction_rules.xml: the practice database only (ADR 0012, ADR 0015). -->
+<full-backup-content>
+    <include domain="database" path="intono.sqlite" />
+</full-backup-content>

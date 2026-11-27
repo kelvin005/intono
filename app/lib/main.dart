@@ -6,6 +6,8 @@ import 'package:flutter/widgets.dart';
 import 'src/audio_control.dart';
 import 'src/bench_runner.dart';
 import 'src/bench_screen.dart';
+import 'src/db/practice_db_open.dart';
+import 'src/db/practice_store.dart';
 import 'src/debug_screen.dart';
 import 'src/ffi/intono_bindings.dart';
 import 'src/ffi_engine.dart';
@@ -13,6 +15,7 @@ import 'src/native_library.dart';
 import 'src/scales/grading_config.dart';
 import 'src/scales/scale.dart';
 import 'src/scales/scale_screen.dart';
+import 'src/settings_screen.dart';
 
 void main() {
   runApp(const IntonoApp());
@@ -32,6 +35,8 @@ class _IntonoAppState extends State<IntonoApp> {
   late final IntonoBindings _bindings = IntonoBindings(nativeLibraryFor(BenchLibrary.product)!.open());
   bool _bench = false;
   bool _scales = false;
+  bool _settings = false;
+  PracticeStore? _store; // the practice history (ADR 0015); null until opened, or if it cannot be opened
   ScaleLibrary? _library;
   GradingConfig _grading = const GradingConfig();
 
@@ -39,6 +44,26 @@ class _IntonoAppState extends State<IntonoApp> {
   void initState() {
     super.initState();
     _loadScaleAssets();
+    _openStore();
+  }
+
+  Future<void> _openStore() async {
+    try {
+      final store = PracticeStore(await openPracticeDb());
+      if (!mounted) {
+        await store.close();
+        return;
+      }
+      setState(() => _store = store);
+    } catch (_) {
+      // no history this session; the scale screen still grades
+    }
+  }
+
+  @override
+  void dispose() {
+    _store?.close();
+    super.dispose();
   }
 
   /// The scale data and the grading thresholds ship with the app (ADR 0011, ADR 0012); the defaults stand if the config cannot be read.
@@ -62,13 +87,27 @@ class _IntonoAppState extends State<IntonoApp> {
   @override
   Widget build(BuildContext context) => Directionality(
         textDirection: TextDirection.ltr,
-        child: _scales && _library != null
+        child: _settings
+            ? SettingsScreen(
+                onClearHistory: () async {
+                  final store = _store;
+                  if (store == null) throw StateError('the practice history is not open');
+                  await store.clearHistory();
+                },
+                onClose: () => setState(() => _settings = false),
+              )
+            : _scales && _library != null
             ? ScaleScreen(
                 audio: _audio,
                 engineFactory: _engineFactory,
                 library: _library!,
                 config: _grading,
                 onClose: () => setState(() => _scales = false),
+                onRunFinished: (r, started, ended) async {
+                  final store = _store;
+                  if (store == null) throw StateError('the practice history is not open');
+                  await store.saveRun(r, startedAt: started, endedAt: ended);
+                },
               )
             : _bench
             ? BenchScreen(
@@ -82,6 +121,7 @@ class _IntonoAppState extends State<IntonoApp> {
                 engineFactory: (p) => FfiEngine(_bindings, Pointer<intono_engine>.fromAddress(p)),
                 onOpenBench: () => setState(() => _bench = true),
                 onOpenScales: _library == null ? null : () => setState(() => _scales = true),
+                onOpenSettings: () => setState(() => _settings = true),
               ),
       );
 }
