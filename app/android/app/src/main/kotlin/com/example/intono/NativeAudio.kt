@@ -6,6 +6,7 @@ package com.example.intono
  */
 class NativeAudio {
     private var handle: Long = 0
+    private var soak = false
 
     /** Opens the microphone stream (low latency, exclusive if granted, unprocessed preset), creates the engine at the stream's
      *  sample rate and starts capture. Returns false and sets [lastError] on failure. Needs the RECORD_AUDIO permission. */
@@ -21,6 +22,31 @@ class NativeAudio {
         if (handle == 0L) return
         nativeStop(handle)
         handle = 0
+        soak = false
+    }
+
+    /** Bench-mode soak: capture as [start] does, with the worker latency probe armed for [minutes] and the queue sampled once a second.
+     *  [inlineEngine]: no worker thread (the battery baseline). End it with [finishSoak]. */
+    @Synchronized
+    fun startSoak(minutes: Int, inlineEngine: Boolean): Boolean {
+        if (handle != 0L) return false
+        handle = nativeStartSoak(minutes, inlineEngine)
+        soak = handle != 0L
+        return soak
+    }
+
+    @Synchronized
+    fun soakStatus(): String = if (handle != 0L && soak) nativeSoakStatus(handle) else "no soak running"
+
+    /** Stops capture and returns the soak report (numbers and stream facts, never audio); the session is closed afterwards. */
+    @Synchronized
+    fun finishSoak(): String {
+        if (handle == 0L || !soak) return "no soak running"
+        val report = nativeFinishSoak(handle)
+        nativeStop(handle)
+        handle = 0
+        soak = false
+        return report
     }
 
     val running: Boolean @Synchronized get() = handle != 0L
@@ -48,6 +74,9 @@ class NativeAudio {
 
     private external fun nativeStart(): Long
     private external fun nativeStop(handle: Long)
+    private external fun nativeStartSoak(minutes: Int, inlineEngine: Boolean): Long
+    private external fun nativeSoakStatus(handle: Long): String
+    private external fun nativeFinishSoak(handle: Long): String
     private external fun nativeHealthy(handle: Long): Boolean
     private external fun nativeEnginePointer(handle: Long): Long
     private external fun nativeSetDrone(handle: Long, enabled: Boolean, midiNote: Int, gain: Float): Boolean

@@ -4,6 +4,8 @@
 
 #include <cstdio>
 
+#include "engine_internal.hpp"
+
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, "intono", __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, "intono", __VA_ARGS__)
 
@@ -52,7 +54,7 @@ struct OboeSession::ErrorCallback : oboe::AudioStreamErrorCallback {
   }
 };
 
-std::unique_ptr<OboeSession> OboeSession::start(std::string* error) {
+std::unique_ptr<OboeSession> OboeSession::start(std::string* error, const SessionOptions& opts) {
   std::unique_ptr<OboeSession> s(new OboeSession());
   s->in_cb_ = std::make_shared<InputCallback>();
   oboe::AudioStreamBuilder b;
@@ -79,7 +81,11 @@ std::unique_ptr<OboeSession> OboeSession::start(std::string* error) {
   c.tuning = 0;
   c.min_hz = 180.f;
   c.max_hz = 3200.f;
-  s->engine_ = intono_create(&c);
+  s->engine_ = opts.inline_engine ? intono_internal::create(&c, true) : intono_create(&c);
+  if (s->engine_ && opts.soak_minutes > 0 && !opts.inline_engine) {   // armed before the first intono_process, as the probe requires
+    const double hops_per_s = static_cast<double>(s->sample_rate_) / c.hop_size;
+    intono_internal::enable_probe(s->engine_, static_cast<size_t>(hops_per_s * 60.0 * opts.soak_minutes * 1.05) + 1024);
+  }
   if (!s->engine_) {
     *error = "intono_create failed for sample rate " + std::to_string(s->sample_rate_);
     s->in_->close();
@@ -90,6 +96,13 @@ std::unique_ptr<OboeSession> OboeSession::start(std::string* error) {
   pc.hop_size = c.hop_size;
   s->pump_ = std::make_unique<AudioPump>(engine_ops(s->engine_), pc);
   s->in_cb_->pump.store(s->pump_.get(), std::memory_order_release);
+  if (opts.soak_minutes > 0) {
+    s->soak_ = std::make_unique<SoakMonitor>(s->engine_, !opts.inline_engine, s->sample_rate_);
+    s->soak_planned_s_ = 60.0 * opts.soak_minutes;
+    s->soak_t0_ = monotonic_seconds();
+    s->soak_cpu0_ = process_cpu_seconds();
+    s->soak_->start_sampler();
+  }
   const oboe::Result st = s->in_->requestStart();
   if (st != oboe::Result::OK) {
     *error = std::string("cannot start the microphone stream: ") + oboe::convertToText(st);
@@ -101,6 +114,7 @@ std::unique_ptr<OboeSession> OboeSession::start(std::string* error) {
 }
 
 OboeSession::~OboeSession() {
+  if (soak_) soak_->stop_sampler();
   if (pump_) pump_->set_drone_enabled(false);
   if (out_) { out_->requestStop(); out_->close(); out_.reset(); }
   if (in_) { in_->requestStop(); in_->close(); in_.reset(); }   // close() returns after the last callback
@@ -203,6 +217,28 @@ std::string OboeSession::info() {
     list("overruns (t s, count):", pump_->events(EventKind::Overrun), "");
   }
   return s;
+}
+
+std::string OboeSession::soak_status() {
+  if (!soak_) return "not a soak session";
+  char b[64];
+  std::snprintf(b, sizeof b, "%.1f of %.1f min: ", (monotonic_seconds() - soak_t0_) / 60.0, soak_planned_s_ / 60.0);
+  return b + soak_->status();
+}
+
+std::string OboeSession::finish_soak() {
+  if (!soak_) return "not a soak session";
+  const double wall = monotonic_seconds() - soak_t0_;
+  const double cpu = process_cpu_seconds() - soak_cpu0_;
+  std::string facts = info();   // the stream facts while the stream still exists
+  {
+    std::lock_guard<std::mutex> lock(mu_);
+    if (pump_) pump_->set_drone_enabled(false);
+    if (out_) { out_->requestStop(); out_->close(); out_.reset(); }
+    if (in_) { in_->requestStop(); in_->close(); in_.reset(); }   // close() returns after the last callback: no more intono_process
+  }
+  const SoakResult r = soak_->finish(wall, cpu, soak_planned_s_);   // reads the probe, which drains the worker
+  return r.text() + facts;
 }
 
 }  // namespace intono_shim
