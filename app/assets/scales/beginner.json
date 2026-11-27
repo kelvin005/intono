@@ -1,0 +1,2492 @@
+{
+ "format": 1,
+ "generator": "tools/scales/gen_scales.py",
+ "tuning_reference": "notes are MIDI numbers in 12-TET names; the A4 reference and the tuning system are applied by the grader",
+ "first_position_range": {
+  "low": 55,
+  "high": 83
+ },
+ "strings": [
+  {
+   "name": "G",
+   "open_midi": 55
+  },
+  {
+   "name": "D",
+   "open_midi": 62
+  },
+  {
+   "name": "A",
+   "open_midi": 69
+  },
+  {
+   "name": "E",
+   "open_midi": 76
+  }
+ ],
+ "scales": [
+  {
+   "id": "g_major_1oct",
+   "title": "G major, 1 octave",
+   "key": "G major",
+   "type": "major",
+   "octaves": 1,
+   "position": 1,
+   "ascending_count": 8,
+   "notes": [
+    {
+     "midi": 55,
+     "name": "G3",
+     "string": "G",
+     "finger": 0
+    },
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    },
+    {
+     "midi": 55,
+     "name": "G3",
+     "string": "G",
+     "finger": 0
+    }
+   ]
+  },
+  {
+   "id": "g_major_2oct",
+   "title": "G major, 2 octaves",
+   "key": "G major",
+   "type": "major",
+   "octaves": 2,
+   "position": 1,
+   "ascending_count": 15,
+   "notes": [
+    {
+     "midi": 55,
+     "name": "G3",
+     "string": "G",
+     "finger": 0
+    },
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 76,
+     "name": "E5",
+     "string": "E",
+     "finger": 0
+    },
+    {
+     "midi": 78,
+     "name": "F#5",
+     "string": "E",
+     "finger": 1
+    },
+    {
+     "midi": 79,
+     "name": "G5",
+     "string": "E",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 78,
+     "name": "F#5",
+     "string": "E",
+     "finger": 1
+    },
+    {
+     "midi": 76,
+     "name": "E5",
+     "string": "E",
+     "finger": 0
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    },
+    {
+     "midi": 55,
+     "name": "G3",
+     "string": "G",
+     "finger": 0
+    }
+   ]
+  },
+  {
+   "id": "d_major_1oct",
+   "title": "D major, 1 octave",
+   "key": "D major",
+   "type": "major",
+   "octaves": 1,
+   "position": 1,
+   "ascending_count": 8,
+   "notes": [
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 73,
+     "name": "C#5",
+     "string": "A",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 73,
+     "name": "C#5",
+     "string": "A",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    }
+   ]
+  },
+  {
+   "id": "a_major_1oct",
+   "title": "A major, 1 octave",
+   "key": "A major",
+   "type": "major",
+   "octaves": 1,
+   "position": 1,
+   "ascending_count": 8,
+   "notes": [
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 61,
+     "name": "C#4",
+     "string": "G",
+     "finger": 3,
+     "placement": "high"
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 68,
+     "name": "G#4",
+     "string": "D",
+     "finger": 3,
+     "placement": "high"
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 68,
+     "name": "G#4",
+     "string": "D",
+     "finger": 3,
+     "placement": "high"
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 61,
+     "name": "C#4",
+     "string": "G",
+     "finger": 3,
+     "placement": "high"
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    }
+   ]
+  },
+  {
+   "id": "a_major_2oct",
+   "title": "A major, 2 octaves",
+   "key": "A major",
+   "type": "major",
+   "octaves": 2,
+   "position": 1,
+   "ascending_count": 15,
+   "notes": [
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 61,
+     "name": "C#4",
+     "string": "G",
+     "finger": 3,
+     "placement": "high"
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 68,
+     "name": "G#4",
+     "string": "D",
+     "finger": 3,
+     "placement": "high"
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 73,
+     "name": "C#5",
+     "string": "A",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 76,
+     "name": "E5",
+     "string": "E",
+     "finger": 0
+    },
+    {
+     "midi": 78,
+     "name": "F#5",
+     "string": "E",
+     "finger": 1
+    },
+    {
+     "midi": 80,
+     "name": "G#5",
+     "string": "E",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 81,
+     "name": "A5",
+     "string": "E",
+     "finger": 3
+    },
+    {
+     "midi": 80,
+     "name": "G#5",
+     "string": "E",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 78,
+     "name": "F#5",
+     "string": "E",
+     "finger": 1
+    },
+    {
+     "midi": 76,
+     "name": "E5",
+     "string": "E",
+     "finger": 0
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 73,
+     "name": "C#5",
+     "string": "A",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 68,
+     "name": "G#4",
+     "string": "D",
+     "finger": 3,
+     "placement": "high"
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 61,
+     "name": "C#4",
+     "string": "G",
+     "finger": 3,
+     "placement": "high"
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    }
+   ]
+  },
+  {
+   "id": "c_major_1oct",
+   "title": "C major, 1 octave",
+   "key": "C major",
+   "type": "major",
+   "octaves": 1,
+   "position": 1,
+   "ascending_count": 8,
+   "notes": [
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    }
+   ]
+  },
+  {
+   "id": "f_major_1oct",
+   "title": "F major, 1 octave",
+   "key": "F major",
+   "type": "major",
+   "octaves": 1,
+   "position": 1,
+   "ascending_count": 8,
+   "notes": [
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 70,
+     "name": "Bb4",
+     "string": "A",
+     "finger": 1,
+     "placement": "low"
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 76,
+     "name": "E5",
+     "string": "E",
+     "finger": 0
+    },
+    {
+     "midi": 77,
+     "name": "F5",
+     "string": "E",
+     "finger": 1,
+     "placement": "low"
+    },
+    {
+     "midi": 76,
+     "name": "E5",
+     "string": "E",
+     "finger": 0
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 70,
+     "name": "Bb4",
+     "string": "A",
+     "finger": 1,
+     "placement": "low"
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    }
+   ]
+  },
+  {
+   "id": "a_natural_minor_1oct",
+   "title": "A natural minor, 1 octave",
+   "key": "A minor",
+   "type": "natural_minor",
+   "octaves": 1,
+   "position": 1,
+   "ascending_count": 8,
+   "notes": [
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    }
+   ]
+  },
+  {
+   "id": "a_natural_minor_2oct",
+   "title": "A natural minor, 2 octaves",
+   "key": "A minor",
+   "type": "natural_minor",
+   "octaves": 2,
+   "position": 1,
+   "ascending_count": 15,
+   "notes": [
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 76,
+     "name": "E5",
+     "string": "E",
+     "finger": 0
+    },
+    {
+     "midi": 77,
+     "name": "F5",
+     "string": "E",
+     "finger": 1,
+     "placement": "low"
+    },
+    {
+     "midi": 79,
+     "name": "G5",
+     "string": "E",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 81,
+     "name": "A5",
+     "string": "E",
+     "finger": 3
+    },
+    {
+     "midi": 79,
+     "name": "G5",
+     "string": "E",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 77,
+     "name": "F5",
+     "string": "E",
+     "finger": 1,
+     "placement": "low"
+    },
+    {
+     "midi": 76,
+     "name": "E5",
+     "string": "E",
+     "finger": 0
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    }
+   ]
+  },
+  {
+   "id": "a_harmonic_minor_1oct",
+   "title": "A harmonic minor, 1 octave",
+   "key": "A minor",
+   "type": "harmonic_minor",
+   "octaves": 1,
+   "position": 1,
+   "ascending_count": 8,
+   "notes": [
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 68,
+     "name": "G#4",
+     "string": "D",
+     "finger": 3,
+     "placement": "high"
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 68,
+     "name": "G#4",
+     "string": "D",
+     "finger": 3,
+     "placement": "high"
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    }
+   ]
+  },
+  {
+   "id": "a_harmonic_minor_2oct",
+   "title": "A harmonic minor, 2 octaves",
+   "key": "A minor",
+   "type": "harmonic_minor",
+   "octaves": 2,
+   "position": 1,
+   "ascending_count": 15,
+   "notes": [
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 68,
+     "name": "G#4",
+     "string": "D",
+     "finger": 3,
+     "placement": "high"
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 76,
+     "name": "E5",
+     "string": "E",
+     "finger": 0
+    },
+    {
+     "midi": 77,
+     "name": "F5",
+     "string": "E",
+     "finger": 1,
+     "placement": "low"
+    },
+    {
+     "midi": 80,
+     "name": "G#5",
+     "string": "E",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 81,
+     "name": "A5",
+     "string": "E",
+     "finger": 3
+    },
+    {
+     "midi": 80,
+     "name": "G#5",
+     "string": "E",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 77,
+     "name": "F5",
+     "string": "E",
+     "finger": 1,
+     "placement": "low"
+    },
+    {
+     "midi": 76,
+     "name": "E5",
+     "string": "E",
+     "finger": 0
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 68,
+     "name": "G#4",
+     "string": "D",
+     "finger": 3,
+     "placement": "high"
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    }
+   ]
+  },
+  {
+   "id": "a_melodic_minor_1oct",
+   "title": "A melodic minor, 1 octave",
+   "key": "A minor",
+   "type": "melodic_minor",
+   "octaves": 1,
+   "position": 1,
+   "ascending_count": 8,
+   "notes": [
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 68,
+     "name": "G#4",
+     "string": "D",
+     "finger": 3,
+     "placement": "high"
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    }
+   ]
+  },
+  {
+   "id": "a_melodic_minor_2oct",
+   "title": "A melodic minor, 2 octaves",
+   "key": "A minor",
+   "type": "melodic_minor",
+   "octaves": 2,
+   "position": 1,
+   "ascending_count": 15,
+   "notes": [
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 68,
+     "name": "G#4",
+     "string": "D",
+     "finger": 3,
+     "placement": "high"
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 76,
+     "name": "E5",
+     "string": "E",
+     "finger": 0
+    },
+    {
+     "midi": 78,
+     "name": "F#5",
+     "string": "E",
+     "finger": 1
+    },
+    {
+     "midi": 80,
+     "name": "G#5",
+     "string": "E",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 81,
+     "name": "A5",
+     "string": "E",
+     "finger": 3
+    },
+    {
+     "midi": 79,
+     "name": "G5",
+     "string": "E",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 77,
+     "name": "F5",
+     "string": "E",
+     "finger": 1,
+     "placement": "low"
+    },
+    {
+     "midi": 76,
+     "name": "E5",
+     "string": "E",
+     "finger": 0
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 60,
+     "name": "C4",
+     "string": "G",
+     "finger": 3
+    },
+    {
+     "midi": 59,
+     "name": "B3",
+     "string": "G",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 57,
+     "name": "A3",
+     "string": "G",
+     "finger": 1
+    }
+   ]
+  },
+  {
+   "id": "d_natural_minor_1oct",
+   "title": "D natural minor, 1 octave",
+   "key": "D minor",
+   "type": "natural_minor",
+   "octaves": 1,
+   "position": 1,
+   "ascending_count": 8,
+   "notes": [
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 70,
+     "name": "Bb4",
+     "string": "A",
+     "finger": 1,
+     "placement": "low"
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 70,
+     "name": "Bb4",
+     "string": "A",
+     "finger": 1,
+     "placement": "low"
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    }
+   ]
+  },
+  {
+   "id": "d_harmonic_minor_1oct",
+   "title": "D harmonic minor, 1 octave",
+   "key": "D minor",
+   "type": "harmonic_minor",
+   "octaves": 1,
+   "position": 1,
+   "ascending_count": 8,
+   "notes": [
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 70,
+     "name": "Bb4",
+     "string": "A",
+     "finger": 1,
+     "placement": "low"
+    },
+    {
+     "midi": 73,
+     "name": "C#5",
+     "string": "A",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 73,
+     "name": "C#5",
+     "string": "A",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 70,
+     "name": "Bb4",
+     "string": "A",
+     "finger": 1,
+     "placement": "low"
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    }
+   ]
+  },
+  {
+   "id": "d_melodic_minor_1oct",
+   "title": "D melodic minor, 1 octave",
+   "key": "D minor",
+   "type": "melodic_minor",
+   "octaves": 1,
+   "position": 1,
+   "ascending_count": 8,
+   "notes": [
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 73,
+     "name": "C#5",
+     "string": "A",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 70,
+     "name": "Bb4",
+     "string": "A",
+     "finger": 1,
+     "placement": "low"
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 65,
+     "name": "F4",
+     "string": "D",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 62,
+     "name": "D4",
+     "string": "D",
+     "finger": 0
+    }
+   ]
+  },
+  {
+   "id": "e_natural_minor_1oct",
+   "title": "E natural minor, 1 octave",
+   "key": "E minor",
+   "type": "natural_minor",
+   "octaves": 1,
+   "position": 1,
+   "ascending_count": 8,
+   "notes": [
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 76,
+     "name": "E5",
+     "string": "E",
+     "finger": 0
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    }
+   ]
+  },
+  {
+   "id": "e_harmonic_minor_1oct",
+   "title": "E harmonic minor, 1 octave",
+   "key": "E minor",
+   "type": "harmonic_minor",
+   "octaves": 1,
+   "position": 1,
+   "ascending_count": 8,
+   "notes": [
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 75,
+     "name": "D#5",
+     "string": "A",
+     "finger": 3,
+     "placement": "high"
+    },
+    {
+     "midi": 76,
+     "name": "E5",
+     "string": "E",
+     "finger": 0
+    },
+    {
+     "midi": 75,
+     "name": "D#5",
+     "string": "A",
+     "finger": 3,
+     "placement": "high"
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    }
+   ]
+  },
+  {
+   "id": "e_melodic_minor_1oct",
+   "title": "E melodic minor, 1 octave",
+   "key": "E minor",
+   "type": "melodic_minor",
+   "octaves": 1,
+   "position": 1,
+   "ascending_count": 8,
+   "notes": [
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 73,
+     "name": "C#5",
+     "string": "A",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 75,
+     "name": "D#5",
+     "string": "A",
+     "finger": 3,
+     "placement": "high"
+    },
+    {
+     "midi": 76,
+     "name": "E5",
+     "string": "E",
+     "finger": 0
+    },
+    {
+     "midi": 74,
+     "name": "D5",
+     "string": "A",
+     "finger": 3
+    },
+    {
+     "midi": 72,
+     "name": "C5",
+     "string": "A",
+     "finger": 2,
+     "placement": "low"
+    },
+    {
+     "midi": 71,
+     "name": "B4",
+     "string": "A",
+     "finger": 1
+    },
+    {
+     "midi": 69,
+     "name": "A4",
+     "string": "A",
+     "finger": 0
+    },
+    {
+     "midi": 67,
+     "name": "G4",
+     "string": "D",
+     "finger": 3
+    },
+    {
+     "midi": 66,
+     "name": "F#4",
+     "string": "D",
+     "finger": 2,
+     "placement": "high"
+    },
+    {
+     "midi": 64,
+     "name": "E4",
+     "string": "D",
+     "finger": 1
+    }
+   ]
+  }
+ ]
+}

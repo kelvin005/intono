@@ -63,6 +63,8 @@ jobs:
           echo "=====FILE app/lib/src/ffi/intono_bindings.dart"; cat lib/src/ffi/intono_bindings.dart; echo "=====END"
           echo "=====FILE app/pubspec.lock"; cat pubspec.lock; echo "=====END"
           exit 1
+      - name: Scale data is what the generator makes (ADR 0011)
+        run: python3 -B tools/scales/gen_scales.py --check
       - name: Analyze
         working-directory: app
         run: flutter analyze
