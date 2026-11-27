@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <atomic>
+#include <chrono>
 #include <thread>
 
 #include "intono/intono.h"
@@ -221,6 +222,9 @@ TEST(Threads, AudioThreadProducesWhileUiThreadConsumes) {
     while ((n = intono_read_frames(e, buf.data(), 32)) > 0)
       for (int i = 0; i < n; ++i, ++total) { ok &= buf[i].t_sec > last_t; last_t = buf[i].t_sec; }
   };
+  // The UI thread is descheduled for a while (on the 2-vCPU CI emulator this happened for long enough that the unpaced producer
+  // filled the 1024-frame ring and frames were dropped, as designed: 1799 of 1872 read, main at a7e258b).
+  std::this_thread::sleep_for(std::chrono::milliseconds(300));
   while (!done) drain();
   audio.join();
   drain();
