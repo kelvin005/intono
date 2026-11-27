@@ -9,8 +9,19 @@ namespace intono {
 // float window pass through the denormal range, where x86 and ARM arithmetic is 10 to 100 times slower: hops of 130 to 300 us
 // instead of 14 us. A software flush is portable and deterministic across platforms (no MXCSR/FPCR, no change to the caller's
 // floating-point environment). It is exact for every value above the threshold, so it changes nothing but signals below -360 dBFS.
+//
+// INTONO_DENORMAL_GUARD (CMake option, default ON, ADR 0009 answer 4) exists only so bench mode can compare a guard-free build on the
+// phone, as information. The default build is bit-identical to phase1-complete; CI proves it. Never ship the OFF build.
+#ifndef INTONO_DENORMAL_GUARD
+#define INTONO_DENORMAL_GUARD 1
+#endif
+#if INTONO_DENORMAL_GUARD
 inline double flush_state(double v) { return (v > -1e-30 && v < 1e-30) ? 0.0 : v; }
 inline float flush_sample(float v) { return (v > -1e-18f && v < 1e-18f) ? 0.f : v; }   // squares stay above FLT_MIN (1.2e-38)
+#else
+inline double flush_state(double v) { return v; }
+inline float flush_sample(float v) { return v; }
+#endif
 
 // y[n] = x[n] - x[n-1] + R*y[n-1]
 struct DcBlocker {

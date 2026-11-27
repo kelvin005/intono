@@ -198,3 +198,39 @@ jobs:
         with: { name: intono-xcframework, path: build/intono.xcframework }
 
 # Still to do: run the public datasets (URMP, NSynth) in the accuracy gate, and run the unit tests on an iOS simulator.
+
+  # ADR 0009 answer 4: the INTONO_DENORMAL_GUARD option may exist only if the default build's output is bit-identical to phase1-complete.
+  # Builds the tag and this commit with the default options and compares intono-cli output byte for byte on the synthetic dev corpus
+  # (all phrase sets, each also with 3 s of digital silence appended, with and without notes), inline and through the worker thread.
+  bit-identity-vs-phase1:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build cmake libsndfile1
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - run: pip install numpy scipy soundfile
+      - name: Build the phase1-complete tag
+        run: |
+          git rev-parse --verify phase1-complete^{commit}
+          git worktree add "$RUNNER_TEMP/frozen" phase1-complete
+          cmake -S "$RUNNER_TEMP/frozen/dsp" -B "$RUNNER_TEMP/frozen-build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DINTONO_BUILD_TESTS=OFF
+          cmake --build "$RUNNER_TEMP/frozen-build"
+      - name: Build this commit with the default options
+        run: |
+          cmake -S dsp -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DINTONO_BUILD_TESTS=OFF
+          cmake --build build
+      - name: Inline
+        run: python tools/accuracy/diff_cli.py --a "$RUNNER_TEMP/frozen-build/intono-cli" --b build/intono-cli
+      - name: Through the worker thread
+        run: python tools/accuracy/diff_cli.py --a "$RUNNER_TEMP/frozen-build/intono-cli" --b build/intono-cli --a-args "--threaded 1" --b-args "--threaded 1"
+
+  # The OFF build must still compile and its guard tests must pass (it ships only in the bench APK, as information).
+  denormal-guard-off:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build cmake
+      - run: cmake -S dsp -B build-off -G Ninja -DCMAKE_BUILD_TYPE=Release -DINTONO_DENORMAL_GUARD=OFF && cmake --build build-off
+      - run: INTONO_EXPECT_GUARD=0 build-off/intono_tests --gtest_filter='DenormalGuard*'
