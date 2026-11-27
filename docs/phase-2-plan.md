@@ -33,9 +33,9 @@ Sequence and open questions: ADR 0009. The measurements listed above (worst hop,
 
 ## Remaining Android items (Kelechi, 2026-11-27)
 
-1. **Bench run** on the Infinix Note 30 (bench APK from `main`): worst hop in both guard builds, latency, stream facts.
-2. **Battery and the 30-minute soak: deferred to Phase 5 hardening** (Kelechi, 2026-11-27: the bench shows the worst hop at about 5 % of
-   the budget, risk low). The soak mode (#17) is the tool then; manual battery % (no adb on the hotspot phone, 1 % resolution), with the
+1. **Bench run** on the Infinix Note 30: done, two runs (2026-11-27); numbers in ADR 0008 Amendment 2.
+2. **Battery and the 30-minute soak: deferred to Phase 5 hardening** (Kelechi, 2026-11-27: the bench shows the hop far inside its budget,
+   risk low; intrinsic worst 52.3 us = 1.0 %, raw and live maxima 5 to 8 %). The soak mode (#17) is the tool then; manual battery % (no adb on the hotspot phone, 1 % resolution), with the
    in-app process CPU % difference as the primary figure. W3/W4 on a phone stay unmeasured until then (ADR 0008 Amendment 2).
 3. **Device-cap amendment** (ADR 0008 Amendment 2) from the two bench reports: the audio thread's worst hop on this phone.
 4. **Android Phase 2 closes on the bench evidence** (Kelechi, 2026-11-27): tag `phase2-android-complete` when the amendment is merged
