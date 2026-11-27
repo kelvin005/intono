@@ -2,6 +2,10 @@
 
 Nov 21, 2026 · @kelechi
 
+> **v1 scope changed (2026-11-27, ADR 0012):** no accounts, no backend, no sync; Pro is a one-time unlock through Play Billing and the
+> App Store. The sections on the backend, sync, remote config, subscriptions and Phase 4 are kept as written for history and are **not
+> built for v1**; ADR 0012 lists them.
+
 ## Overview and principles
 
 The app scales to millions of users because all real-time audio work runs on the phone; the backend only stores small practice summaries and handles accounts and subscriptions. Working name: **Intono** (rename freely).
