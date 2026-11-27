@@ -30,7 +30,12 @@ class _IntonoAppState extends State<IntonoApp> {
   Widget build(BuildContext context) => Directionality(
         textDirection: TextDirection.ltr,
         child: _bench
-            ? BenchScreen(audio: _audio, runner: const FfiBenchRunner(), onClose: () => setState(() => _bench = false))
+            ? BenchScreen(
+                audio: _audio,
+                runner: const FfiBenchRunner(),
+                engineFactory: (p) => FfiEngine(_bindings, Pointer<intono_engine>.fromAddress(p)),
+                onClose: () => setState(() => _bench = false),
+              )
             : DebugScreen(
                 audio: _audio,
                 engineFactory: (p) => FfiEngine(_bindings, Pointer<intono_engine>.fromAddress(p)),

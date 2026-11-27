@@ -20,6 +20,16 @@ abstract class AudioControl {
   Future<String> info();
 
   Future<String> lastError();
+
+  /// Bench-mode soak (ADR 0008 W3/W4, polling power cost): capture with the worker latency probe armed for [minutes]; [inlineEngine]
+  /// runs without the worker thread (the battery baseline). The screen stays on until [finishSoak] or [stop].
+  Future<bool> startSoak({required int minutes, required bool inlineEngine});
+
+  /// One progress line (elapsed, queue high-water so far, drops so far).
+  Future<String> soakStatus();
+
+  /// Stops capture and returns the soak report (numbers and stream facts, never audio). The engine pointer is invalid afterwards.
+  Future<String> finishSoak();
 }
 
 class MethodChannelAudio implements AudioControl {
@@ -59,4 +69,14 @@ class MethodChannelAudio implements AudioControl {
 
   @override
   Future<String> lastError() => _call<String>('lastError', '');
+
+  @override
+  Future<bool> startSoak({required int minutes, required bool inlineEngine}) =>
+      _call<bool>('startSoak', false, {'minutes': minutes, 'inline': inlineEngine});
+
+  @override
+  Future<String> soakStatus() => _call<String>('soakStatus', 'unavailable');
+
+  @override
+  Future<String> finishSoak() => _call<String>('finishSoak', 'soak report unavailable');
 }

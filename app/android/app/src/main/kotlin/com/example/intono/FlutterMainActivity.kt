@@ -2,6 +2,7 @@ package com.example.intono
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.view.WindowManager
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodCall
@@ -25,7 +26,10 @@ class FlutterMainActivity : FlutterActivity() {
     private fun onCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "start" -> start(result)
-            "stop" -> { audio.stop(); result.success(null) }
+            "stop" -> { audio.stop(); keepScreenOn(false); result.success(null) }
+            "startSoak" -> startSoak(call.argument<Int>("minutes") ?: 30, call.argument<Boolean>("inline") ?: false, result)
+            "soakStatus" -> result.success(audio.soakStatus())
+            "finishSoak" -> { val r = audio.finishSoak(); keepScreenOn(false); result.success(r) }
             "enginePointer" -> result.success(audio.enginePointer())
             "setDrone" -> result.success(
                 audio.setDrone(
@@ -51,6 +55,23 @@ class FlutterMainActivity : FlutterActivity() {
         result.success(audio.start())
     }
 
+    /** The soak runs in the foreground with the screen on: the app stops capture when it is hidden, and both soak runs (worker and
+     *  inline) then carry the same screen cost, so their difference is the worker's. */
+    private fun startSoak(minutes: Int, inline: Boolean, result: MethodChannel.Result) {
+        if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            result.success(false)   // the meter's Start asks for the permission; the bench does not
+            return
+        }
+        val ok = audio.startSoak(minutes, inline)
+        if (ok) keepScreenOn(true)
+        result.success(ok)
+    }
+
+    private fun keepScreenOn(on: Boolean) {
+        if (on) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+    }
+
     @Deprecated("FlutterActivity still routes permission results through this callback")
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
@@ -63,6 +84,7 @@ class FlutterMainActivity : FlutterActivity() {
     /** Never record in the background; Dart stops capture on its own lifecycle signal first, this is the backstop. */
     override fun onStop() {
         audio.stop()
+        keepScreenOn(false)
         super.onStop()
     }
 }

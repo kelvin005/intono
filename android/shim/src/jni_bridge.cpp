@@ -36,6 +36,30 @@ JNIEXPORT jlong JNICALL Java_com_example_intono_NativeAudio_nativeStart(JNIEnv*,
 
 JNIEXPORT void JNICALL Java_com_example_intono_NativeAudio_nativeStop(JNIEnv*, jobject, jlong h) { delete session(h); }
 
+// Bench-mode soak (ADR 0008 W3/W4, polling power cost): the same capture with the worker latency probe armed and the queue sampled once a
+// second; inlineEngine runs without the worker thread (the battery baseline).
+JNIEXPORT jlong JNICALL Java_com_example_intono_NativeAudio_nativeStartSoak(JNIEnv*, jobject, jint minutes, jboolean inlineEngine) {
+  intono_shim::SessionOptions o;
+  o.soak_minutes = minutes > 0 ? minutes : 1;
+  o.inline_engine = inlineEngine == JNI_TRUE;
+  std::string err;
+  std::unique_ptr<OboeSession> s = OboeSession::start(&err, o);
+  if (!s) {
+    set_error(err);
+    return 0;
+  }
+  set_error("");
+  return reinterpret_cast<jlong>(s.release());
+}
+
+JNIEXPORT jstring JNICALL Java_com_example_intono_NativeAudio_nativeSoakStatus(JNIEnv* env, jobject, jlong h) {
+  return env->NewStringUTF(session(h)->soak_status().c_str());
+}
+
+JNIEXPORT jstring JNICALL Java_com_example_intono_NativeAudio_nativeFinishSoak(JNIEnv* env, jobject, jlong h) {
+  return env->NewStringUTF(session(h)->finish_soak().c_str());
+}
+
 JNIEXPORT jboolean JNICALL Java_com_example_intono_NativeAudio_nativeHealthy(JNIEnv*, jobject, jlong h) {
   return session(h)->healthy() ? JNI_TRUE : JNI_FALSE;
 }
