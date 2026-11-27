@@ -65,4 +65,7 @@ abstract class EngineApi {
 
   /// Note [i] of the last [readNotes] batch.
   Note noteAt(int i);
+
+  /// Scale mode (ADR 0014): the MIDI notes the player should play, in order (at most 128 are used). Empty: free mode.
+  void setExpected(List<int> midiNotes);
 }

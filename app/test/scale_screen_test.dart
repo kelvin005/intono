@@ -67,6 +67,19 @@ void main() {
     expect(find.text('Stop'), findsOneWidget);
   });
 
+  testWidgets('a run gives the engine the scale as its expected sequence, and Stop returns it to free mode (ADR 0014)', (t) async {
+    await t.pumpWidget(screen());
+    await t.tap(find.text('G major, 1 octave'));
+    await t.pump();
+    await t.pump();
+    expect(engine.expectedCalls, [
+      [for (final s in g.notes) s.midi]
+    ]);
+    await t.tap(find.text('Stop'));
+    await t.pump();
+    expect(engine.expectedCalls.last, isEmpty);
+  });
+
   testWidgets('the whole screen takes the grade of the last note', (t) async {
     await t.pumpWidget(screen());
     await t.tap(find.text('G major, 1 octave'));
