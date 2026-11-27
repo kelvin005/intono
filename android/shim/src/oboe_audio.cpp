@@ -165,13 +165,24 @@ std::string OboeSession::info() {
   std::lock_guard<std::mutex> lock(mu_);
   char buf[1024];
   std::string s;
-  const auto latency = [&](oboe::AudioStream& st, char* out, size_t cap) {   // from the stream's own timestamps; not available right after start
+  // Latency (ADR 0009 decision 5): measured from the stream's own timestamps where the device provides them (not right after start);
+  // otherwise the reason Oboe gives, and the burst-based estimate, marked as an estimate. For input the estimate is a lower bound: one
+  // burst has to be captured before the app sees it (converter and driver delays come on top).
+  const auto latency = [&](oboe::AudioStream& st, char* out, size_t cap) {
     const auto l = st.calculateLatencyMillis();
-    if (l) std::snprintf(out, cap, ", latency %.1f ms", l.value());
-    else std::snprintf(out, cap, ", latency n/a");
+    const int rate = st.getSampleRate();
+    const double burst_ms = rate > 0 ? 1000.0 * st.getFramesPerBurst() / rate : 0.0;
+    const double buffer_ms = rate > 0 ? 1000.0 * st.getBufferSizeInFrames() / rate : 0.0;
+    if (l) {
+      std::snprintf(out, cap, ", latency %.1f ms (timestamps)", l.value());
+    } else if (st.getDirection() == oboe::Direction::Input) {
+      std::snprintf(out, cap, ", latency n/a from timestamps (%s); estimate >= %.1f ms (one burst)", oboe::convertToText(l.error()), burst_ms);
+    } else {
+      std::snprintf(out, cap, ", latency n/a from timestamps (%s); estimate %.1f ms (buffer)", oboe::convertToText(l.error()), buffer_ms);
+    }
   };
   if (in_) {
-    char lat[48];
+    char lat[160];
     latency(*in_, lat, sizeof lat);
     std::snprintf(buf, sizeof buf, "input: %s, %s, %s, preset %s, %d Hz, burst %d, buffer %d%s%s\n",
                   oboe::convertToText(in_->getAudioApi()), oboe::convertToText(in_->getSharingMode()),
@@ -180,7 +191,7 @@ std::string OboeSession::info() {
     s += buf;
   }
   if (out_) {
-    char lat[48];
+    char lat[160];
     latency(*out_, lat, sizeof lat);
     std::snprintf(buf, sizeof buf, "output: %s, %s, %s, %d Hz, burst %d, buffer %d%s%s\n", oboe::convertToText(out_->getAudioApi()),
                   oboe::convertToText(out_->getSharingMode()), oboe::convertToText(out_->getPerformanceMode()), out_->getSampleRate(),
