@@ -64,7 +64,7 @@ jobs:
         working-directory: app
         run: |
           dart run ffigen --config ffigen.yaml
-          dart run build_runner build --delete-conflicting-outputs   # ADR 0015: lib/src/db/practice_db.g.dart
+          dart run build_runner build   # ADR 0015: lib/src/db/practice_db.g.dart
           GEN="lib/src/ffi/intono_bindings.dart lib/src/db/practice_db.g.dart pubspec.lock"
           if [ -z "$(git status --porcelain -- $GEN)" ]; then echo "bindings, generated code and lockfile are up to date"; exit 0; fi
           git status --porcelain
