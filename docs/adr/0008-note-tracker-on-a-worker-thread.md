@@ -136,3 +136,51 @@ The test now holds its producer back while more than 512 frames are unread, as a
 delay as a regression check. It still checks what it is for: strictly increasing frame times and no loss while both threads run.
 Ring overflow remains covered by the worker and ring tests. **No library code changes**: `dsp/src`, `intono.h`, the gates and the
 thresholds are untouched, and the default build's output is unchanged (bit-identity job).
+
+## Amendment 2 (DRAFT, 2026-11-27): device caps from the phone bench; soak and battery deferred to Phase 5
+
+Status: **draft**. The measured values below are to be filled from the two bench report texts (Kelechi, Infinix Note 30); they are not
+estimates and nothing below is set until they are in. Needs Kelechi's "merge".
+
+### What was measured (bench mode, ADR 0009 decision 5)
+
+Device: Infinix Note 30, Android 14, mid-range MediaTek (SoC from `adb shell getprop ro.soc.model`: **to fill**). Bench APK (arm64
+profile build, AOT Dart), plugged in, Bluetooth off, drone off. Run 1 in a quiet room; run 2 with Kelechi talking during the capture phase
+(the worst-hop phase uses the generated signal, so speech affects only the capture numbers).
+
+Worst hop on the generated signal (3 s 440 Hz tone, 4 s scale, 6 s digital silence), 10 runs, intrinsic = per-hop minimum over the runs:
+
+| | guard ON (product) | guard OFF (information) |
+|---|---|---|
+| intrinsic median / p99 / max (us), run 1 | **to fill** | **to fill** |
+| intrinsic median / p99 / max (us), run 2 | **to fill** | **to fill** |
+| intrinsic max, silence section (the denormal case) | **to fill** | **to fill** |
+| raw max (us), any run | **to fill** | **to fill** |
+
+Capture phase (10 s, real microphone): input latency (the reason Oboe gives when no timestamp, #19), late callbacks, position gaps,
+stream overruns, output xruns, slow hops: **to fill**. Both runs on the earlier bench APK showed `latency n/a`; the next run prints the
+reason and a burst-based lower bound.
+
+Kelechi's reading of the reports (2026-11-27): the worst hop is about **5 % of the hop budget** (5333 us at 48 kHz, so about 270 us).
+
+### Device cap (proposed; Kelechi decides)
+
+- **W1-device (audio thread, Infinix Note 30 class):** intrinsic worst hop of the product build (guard ON) <= **2 x the measured intrinsic
+  max** (headroom for ADR 0006 voice rejection and ADR 0007 multi-candidate tracking), and never above **25 % of the hop budget** (1333 us
+  at 48 kHz). Re-measured with the bench Run after any DSP change, on the same phone.
+- The desktop W1 (<= 100 us) is unchanged. The guard-OFF numbers are information only (the guard stays, phase-2-plan).
+- **M5 stays open for a low-end phone:** this is a mid-range device; the true low-end 2 GB phone is due before Phase 5 (ADR 0009
+  answer 1) and gets its own cap from the same measurement.
+
+### Deferred to Phase 5 hardening (Kelechi, 2026-11-27)
+
+The **30-minute soak (W3, W4 on the phone) and the polling power cost** move to Phase 5 hardening. Reason given: the bench shows the
+worst hop at about 5 % of the budget, so the risk is low. Until then:
+
+- W3 and W4 on a phone are **unmeasured**; the desktop results (Amendment 1: high-water 11, p99 2.15 ms) are the only evidence. The 350 ms
+  note-delay gate is unchanged; W4 is amended to 400 ms only if a phone measurably fails 350 ms.
+- The soak mode is in the app (#17) and is the Phase 5 tool. No adb is available on the phone used (it is the hotspot), so the power
+  comparison will use **manual battery %**: 1 % steps (about 50 mAh on a 5000 mAh battery) and the phone's own estimate, coarser than
+  `batterystats`. Over 30 minutes the poll's cost is likely below that resolution; the in-app **process CPU %** difference (worker minus
+  inline baseline) is the primary figure and battery % the cross-check.
+- The adaptive back-off of the 2 ms poll stays the fallback if the cost turns out significant.
