@@ -31,6 +31,9 @@ Widget host(Widget w) => Directionality(textDirection: TextDirection.ltr, child:
 
 Color glance(WidgetTester t) => t.widget<ColoredBox>(find.byKey(const Key('glance'))).color;
 
+Finder keyed(String prefix) =>
+    find.byWidgetPredicate((w) => w.key is ValueKey<String> && (w.key! as ValueKey<String>).value.startsWith('$prefix:'));
+
 void main() {
   late FakeAudio audio;
   late FakeEngine engine;
@@ -51,7 +54,7 @@ void main() {
     await t.pumpWidget(screen());
     expect(find.text('G major, 1 octave'), findsOneWidget);
     expect(find.text('A melodic minor, 2 octaves'), findsOneWidget);
-    expect(find.byKey(const Key('scale-tile')), findsNWidgets(lib.scales.length));
+    expect(keyed('scale-tile'), findsNWidgets(lib.scales.length));
   });
 
   testWidgets('choosing a scale starts capture; the glance view is neutral until the first note', (t) async {
@@ -94,7 +97,7 @@ void main() {
     expect(audio.started, isFalse, reason: 'capture stops with the run');
     expect(find.text('97 %'), findsOneWidget); // (14 + 0.5) / 15 = 96.7
     expect(find.text('🟢 14   🟡 1   🔴 0'), findsOneWidget);
-    expect(find.byKey(const Key('result-note')), findsNWidgets(15));
+    expect(keyed('result-note'), findsNWidgets(15));
     expect(find.textContaining('C4'), findsWidgets);
     expect(find.text('Play again'), findsOneWidget);
   });
@@ -137,6 +140,6 @@ void main() {
     await t.pump();
     await t.pump();
     expect(find.textContaining('no microphone permission'), findsOneWidget);
-    expect(find.byKey(const Key('scale-tile')), findsWidgets);
+    expect(keyed('scale-tile'), findsWidgets);
   });
 }

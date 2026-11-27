@@ -159,7 +159,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
               const SizedBox(height: 12),
               for (final s in widget.library.scales)
                 GestureDetector(
-                  key: const Key('scale-tile'),
+                  key: ValueKey('scale-tile:${s.id}'),
                   behavior: HitTestBehavior.opaque,
                   onTap: () => _start(s),
                   child: Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Text(s.title)),
@@ -215,7 +215,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
               children: [
                 for (final g in r.notes)
                   Container(
-                    key: const Key('result-note'),
+                    key: ValueKey('result-note:${g.index}'),
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                     color: ScaleColors.of(g.grade),
                     child: Text('${g.expected.name}\n${cents(g.cents)}\n${where(g.expected)}',
