@@ -41,10 +41,14 @@ void main() {
     expect(r.latestGrade, Grade.red);
   });
 
-  test('a stray extra note does not change the glance colour', () {
+  test('a stray note shows red while it is the latest, then becomes an extra once the next scale note arrives', () {
     final r = ScaleRun(g, const GradingConfig())..addNotes([n(55, 0, 0), n(57, 0, 0.5)]);
-    r.addNotes([n(80, 0, 0.8)]); // nowhere in the scale
+    r.addNotes([n(80, 0, 0.8)]); // nowhere near B3: for now it is a wrong note in B3's place
+    expect(r.latestGrade, Grade.red);
+    r.addNotes([n(59, 0, 1.2)]); // B3 arrives: the stray note is re-read as an extra
     expect(r.latestGrade, Grade.green);
+    expect(r.result().extras.single.midiNote, 80);
+    expect(r.result().notes[2].grade, Grade.green);
   });
 
   test('complete once the final note of the scale is played; the result grades the whole run', () {
