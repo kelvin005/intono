@@ -3,7 +3,7 @@
   "_comment": "Scale grading thresholds (ADR 0011). Bundled with the app in v1 (no remote config, ADR 0012): change them with a release.",
   "grade_green_cents": 5,
   "grade_yellow_cents": 15,
-  "min_note_ms": 150,
+  "min_note_ms": 80,
   "merge_gap_ms": 120,
   "merge_max_cents_diff": 25
 }

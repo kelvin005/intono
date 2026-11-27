@@ -3,7 +3,7 @@ import 'dart:convert';
 /// Scale grading thresholds (ADR 0011). In v1 they come from a file bundled with the app (assets/config/grading.json; no remote config,
 /// ADR 0012). The defaults here are the same values, so a missing or older file still grades the same way.
 class GradingConfig {
-  const GradingConfig({this.greenCents = 5, this.yellowCents = 15, this.minNoteMs = 150, this.mergeGapMs = 120, this.mergeMaxCentsDiff = 25});
+  const GradingConfig({this.greenCents = 5, this.yellowCents = 15, this.minNoteMs = 80, this.mergeGapMs = 120, this.mergeMaxCentsDiff = 25});
 
   /// |cents| at or below this: 🟢.
   final double greenCents;
@@ -11,7 +11,8 @@ class GradingConfig {
   /// |cents| at or below this (and above [greenCents]): 🟡. Beyond: 🔴.
   final double yellowCents;
 
-  /// Notes shorter than this are not graded (architecture doc: "a note counts when it is held 150 ms or more").
+  /// Notes shorter than this are not graded. 80 ms (Kelechi, 2026-11-27; the architecture doc's 150 ms marked fast semiquavers missed),
+  /// just above the ADR 0004 glitch rule's 12 frames (64 ms).
   final double minNoteMs;
 
   /// Consecutive notes of the same pitch with a gap up to this are one note split in two (merged before grading).

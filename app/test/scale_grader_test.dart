@@ -10,7 +10,7 @@ import 'package:intono_app/src/scales/scale.dart';
 
 final lib = ScaleLibrary.fromJsonString(File('assets/scales/beginner.json').readAsStringSync());
 final gMajor = lib.byId('g_major_1oct')!; // G3 A3 B3 C4 D4 E4 F#4 G4 F#4 E4 D4 C4 B3 A3 G3
-const cfg = GradingConfig(); // the v1 defaults: 5 / 15 cents, 150 ms, merge gap 120 ms within 25 cents
+const cfg = GradingConfig(); // the v1 defaults: 5 / 15 cents, 80 ms, merge gap 120 ms within 25 cents
 
 Note note(int midi, double cents, double t0, {double ms = 400, int? frames}) => Note(
       tStart: t0,
@@ -133,17 +133,27 @@ void main() {
     expect(r.green, 15);
   });
 
-  test('notes shorter than min_note_ms are not graded: a glitch is ignored, a short scale note is missed', () {
+  test('notes shorter than min_note_ms (80) are not graded: a 60 ms glitch is ignored, a 70 ms scale note is missed', () {
     final base = play(gMajor);
     final glitchy = [...base]..insert(4, note(80, 0, 1.92, ms: 60)); // a 60 ms glitch between C4 and D4
     final r1 = gradeScale(gMajor, glitchy, cfg);
     expect(r1.extras, isEmpty);
     expect(r1.green, 15);
-    final withShort = [...base]..[9] = note(base[9].midiNote, 0, base[9].tStart, ms: 120); // E4 descending, 120 ms
+    final withShort = [...base]..[9] = note(base[9].midiNote, 0, base[9].tStart, ms: 70); // E4 descending, 70 ms
     final r2 = gradeScale(gMajor, withShort, cfg);
     expect(r2.notes[9].grade, Grade.missed);
     expect(r2.missed, 1);
     expect(r2.extras, isEmpty);
+  });
+
+  test('a fast scale in 120 ms semiquavers is graded, not missed (min_note_ms 80, Kelechi 2026-11-27)', () {
+    final s = gMajor;
+    final fast = [for (var i = 0; i < s.notes.length; i++) note(s.notes[i].midi, i == 4 ? 8 : 0, i * 0.125, ms: 120)];
+    final r = gradeScale(s, fast, cfg);
+    expect(r.missed, 0);
+    expect(r.extras, isEmpty);
+    expect((r.green, r.yellow), (14, 1));
+    expect(r.notes.every((g) => g.played != null), isTrue);
   });
 
   test('cents to the expected note when the engine named the neighbour', () {
@@ -162,7 +172,7 @@ void main() {
 
   test('the thresholds come from the bundled config, and changing them changes the grades', () {
     final bundled = GradingConfig.fromJsonString(File('assets/config/grading.json').readAsStringSync());
-    expect((bundled.greenCents, bundled.yellowCents, bundled.minNoteMs, bundled.mergeGapMs, bundled.mergeMaxCentsDiff), (5.0, 15.0, 150.0, 120.0, 25.0));
+    expect((bundled.greenCents, bundled.yellowCents, bundled.minNoteMs, bundled.mergeGapMs, bundled.mergeMaxCentsDiff), (5.0, 15.0, 80.0, 120.0, 25.0));
     final strict = const GradingConfig(greenCents: 3, yellowCents: 8);
     final r = gradeScale(gMajor, play(gMajor, cents: {0: 4, 1: 9}), strict);
     expect([r.notes[0].grade, r.notes[1].grade], [Grade.yellow, Grade.red]);
