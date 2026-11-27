@@ -185,4 +185,11 @@ void main() {
     expect(r.notes.length, 29);
     expect((r.green, r.yellow, r.red, r.missed), (26, 1, 1, 1));
   });
+
+  test('a partial run aligns to the start of the scale (the tonic appears twice: opening and closing)', () {
+    for (var k = 1; k < gMajor.notes.length; k++) {
+      final r = gradeScale(gMajor, play(gMajor).sublist(0, k), cfg);
+      expect([for (final g in r.notes) if (g.played != null) g.index], List.generate(k, (i) => i), reason: 'first $k notes');
+    }
+  });
 }
