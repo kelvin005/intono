@@ -31,6 +31,26 @@ Android first, iOS after. Tests first; an ADR for anything new; PRs only when CI
 
 Sequence and open questions: ADR 0009. The measurements listed above (worst hop, polling power, worker latency and queue depth) are taken with the bench mode on the real phone.
 
+## Remaining Android items (Kelechi, 2026-11-27)
+
+1. **Bench run** on the Infinix Note 30 (bench APK from `main`): worst hop in both guard builds, latency, stream facts.
+2. **Battery and the 30-minute soak** with the soak mode (bench screen, PR #17): one 30-minute soak with the worker, one inline baseline,
+   `dumpsys batterystats` reset before and read after each. Gives W3 (queue high-water, slope, drops), W4 (worker latency p99/max) and
+   the cost of the 2 ms poll (difference between the two runs).
+3. **Device-cap amendment** (ADR 0008/0009) from those numbers: the audio thread's worst hop on this phone, W3 and W4 on the phone.
+4. **Tag `phase2-android-complete`** when 1 to 3 are in (Kelechi pushes tags).
+
+The true low-end 2 GB device is still due before Phase 5 (ADR 0009 answer 1); the mid-range numbers are not the low-end numbers.
+
+## iOS (Kelechi, 2026-11-27; architecture in ADR 0010)
+
+- The iOS shim is built on **AVAudioEngine** (real-time `AVAudioSinkNode` capture and `AVAudioSourceNode` drone, the same portable
+  `AudioPump` as Android) and tested **on the iOS Simulator in CI only**.
+- **Real-iPhone testing moves to just before the iOS launch, through TestFlight.** Until then no iOS number comes from a device; the iOS
+  device caps and the ADR 0008 measurements on an iPhone are taken in that pre-launch milestone.
+- Phase 2's iOS part closes on Simulator evidence (`phase2-ios-sim-complete`: build, symbol checks, XCTest smoke tests green). The shared
+  C++ stays in `android/shim/src/`; Apple Developer Program enrolment waits until the TestFlight milestone (ADR 0010 answers).
+
 ## Device results (Kelechi, Infinix Note 30, Android 14)
 
 **First device sanity result (2026-11-23, PR 3 debug APK, Bluetooth off, drone off and never toggled).** A 440 Hz tone played from another device through the air into the phone's microphone: the meter read A4 at +0.1, -0.1 and +0.0 cents. So the whole path (Oboe capture with the Unprocessed preset, `libintono`, ffigen bindings, vsync polling) works end to end, and the accuracy through speaker, air and microphone is within +-0.1 cents for a pure tone. Humming was not detected because the voice was below the 180 Hz search floor (`min_hz`), as designed.
