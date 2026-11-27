@@ -285,7 +285,7 @@ extern "C" __attribute__((used, visibility("default"))) void* const intono_ios_c
     reinterpret_cast<void*>(&intono_process),      reinterpret_cast<void*>(&intono_read_frames),
     reinterpret_cast<void*>(&intono_read_notes),   reinterpret_cast<void*>(&intono_set_tonic),
     reinterpret_cast<void*>(&intono_drone_set),    reinterpret_cast<void*>(&intono_drone_render),
-    reinterpret_cast<void*>(&intono_bench_run),
+    reinterpret_cast<void*>(&intono_set_expected), reinterpret_cast<void*>(&intono_bench_run),
 };
 
 extern "C" int intono_ios_link_c_api(void) {

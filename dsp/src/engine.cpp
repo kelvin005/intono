@@ -32,6 +32,7 @@
 #include "notes_hmm.hpp"
 #include "post.hpp"
 #include "ring.hpp"
+#include "score_cursor.hpp"
 #include "tuning.hpp"
 #include "yin.hpp"
 
@@ -110,6 +111,15 @@ struct intono_engine {
   intono::NoteTracker notes;                          // worker thread only (inline mode: audio thread)
   intono::SpscRing<intono_note> note_ring{kNoteRing}; // worker -> UI thread
   std::atomic<int> tonic{60};
+  // ---- scale mode (ADR 0014) ----
+  // UI -> worker handoff of the expected sequence: a seqlock (odd while the UI writes); the data are atomics so the handoff is
+  // race-free without a lock. The worker (inline mode: the audio thread) picks a new sequence up between records.
+  std::atomic<uint32_t> exp_seq{0};
+  std::atomic<int> exp_n{0};
+  std::atomic<int> exp_buf[intono::ScoreCursor::kMax];
+  uint32_t exp_seen = 0;               // worker
+  intono::ScoreCursor cursor;          // worker
+  int exp_tmp[intono::ScoreCursor::kMax] = {};   // worker scratch
   intono::Drone drone;
 
   // ---- worker (ADR 0008) ----
@@ -272,8 +282,40 @@ struct intono_engine {
     ++fidx;
   }
 
+  // UI thread only (intono_set_expected).
+  void set_expected(const int* midi, int n) {
+    const int m = (midi && n > 0) ? std::min(n, intono::ScoreCursor::kMax) : 0;
+    const uint32_t s0 = exp_seq.load(std::memory_order_relaxed);
+    exp_seq.store(s0 + 1, std::memory_order_relaxed);
+    std::atomic_thread_fence(std::memory_order_release);
+    for (int i = 0; i < m; ++i) exp_buf[i].store(midi[i], std::memory_order_relaxed);
+    exp_n.store(m, std::memory_order_relaxed);
+    exp_seq.store(s0 + 2, std::memory_order_release);
+  }
+
+  // Worker: take a new expected sequence if the UI published one (a torn read is retried at the next record), then give the tracker
+  // the steps ahead of the cursor. Free mode: no pairs, so the tracker decodes exactly as before ADR 0014.
+  void refresh_bias(bool poll) {
+    if (poll) {
+      const uint32_t s1 = exp_seq.load(std::memory_order_acquire);
+      if (s1 != exp_seen && (s1 & 1u) == 0) {
+        const int m = exp_n.load(std::memory_order_relaxed);
+        for (int i = 0; i < m; ++i) exp_tmp[i] = exp_buf[i].load(std::memory_order_relaxed);
+        std::atomic_thread_fence(std::memory_order_acquire);
+        if (exp_seq.load(std::memory_order_relaxed) == s1) {
+          exp_seen = s1;
+          cursor.set(exp_tmp, m);
+        }
+      }
+    }
+    int from[intono::ScoreCursor::kAhead], to[intono::ScoreCursor::kAhead];
+    const int np = cursor.pairs(from, to);
+    notes.set_bias(from, to, np);
+  }
+
   // One hop through the note tracker. Runs on the worker (or on the audio thread in inline mode).
   void track(const HopRecord& r) {
+    refresh_bias(true);
     intono::NoteSummary ns[intono::NoteTracker::kMaxOut];
     if (prev_fidx >= 0 && r.fidx != prev_fidx + 1) {   // a record was dropped: no frame may be carried across the hole
       const int g = notes.flush(ns);
@@ -291,6 +333,7 @@ struct intono_engine {
     }
     const int got = notes.update(r.voiced, r.rms_onset, nf, r.cents_a4, ns);
     for (int i = 0; i < got; ++i) emit_note(ns[i]);
+    if (got > 0) refresh_bias(false);   // the cursor moved: the next frame decodes with the new steps
   }
 
   void worker_main() {
@@ -350,6 +393,7 @@ struct intono_engine {
     n.vibrato_width_cents = static_cast<float>(ns.vib_width);
     n.mean_confidence = static_cast<float>(ns.mean_conf);
     n.frame_count = ns.frames;
+    cursor.on_note(n.midi_note);   // scale mode (ADR 0014); no-op in free mode
     note_ring.push(n);
   }
 
@@ -466,6 +510,10 @@ int intono_read_notes(intono_engine* e, intono_note* out, int max) {
 
 void intono_set_tonic(intono_engine* e, int midi_note) {
   if (e) e->tonic.store(midi_note, std::memory_order_relaxed);
+}
+
+void intono_set_expected(intono_engine* e, const int* midi_notes, int n) {
+  if (e) e->set_expected(midi_notes, n);
 }
 
 void intono_drone_set(intono_engine* e, int midi_note, float gain, int timbre) {

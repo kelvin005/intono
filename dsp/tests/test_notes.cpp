@@ -37,6 +37,15 @@ struct Driver {
   void voiced(double c, bool rms = false, double vr = 0, double vw = 0) { push(true, c, rms, vr, vw); }
   void run(double c, int n) { for (int k = 0; k < n; ++k) voiced(c); }
   void silent(int n = 1) { for (int k = 0; k < n; ++k) push(false, 0, false, 0, 0); }
+  // Scale mode (ADR 0014): the steps of an expected MIDI sequence, all given at once (at most kHmmMaxBias).
+  void expect(const std::vector<int>& midi) {
+    std::vector<int> a, b;
+    for (size_t i = 1; i < midi.size(); ++i) {
+      a.push_back(midi[i - 1]);
+      b.push_back(midi[i]);
+    }
+    tr.set_bias(a.data(), b.data(), static_cast<int>(a.size()));
+  }
 };
 
 }  // namespace
@@ -194,8 +203,13 @@ namespace {
 // them; `glitch_at` >= 0 puts `nglitch` octave-error frames (-1200) at the head of that note. Returns the notes; the true
 // boundaries (between two frames) are written to `truth`.
 std::vector<NoteSummary> run_case(const std::vector<double>& ms, const std::vector<double>& lv, double vib, double phase,
-                                  int glitch_at, int nglitch, std::vector<double>& truth) {
+                                  int glitch_at, int nglitch, std::vector<double>& truth, bool scale = false) {
   Driver d;
+  if (scale) {   // the expected sequence is the played one (the nearest ET note of each level; levels are cents re A4 = MIDI 69)
+    std::vector<int> m;
+    for (double c : lv) m.push_back(69 + static_cast<int>(std::lround(c / 100.0)));
+    d.expect(m);
+  }
   int k = 0;
   truth.clear();
   for (size_t i = 0; i < ms.size(); ++i) {
@@ -243,7 +257,7 @@ TEST(NoteTracker, ShortNotesInTheMiddleOfARunAreNotMerged) {
 // ADR 0004 Amendment 4, condition set by Kelechi: a dwell under kFitMinEdge (12 frames, 64 ms) is treated as an octave-error
 // glitch. A real note of 80 to 90 ms (15 to 17 frames) must not be taken for one, with and without octave-error frames at
 // its head. Returns the number of failing cases (a missing note or a boundary more than 25 ms off).
-static int mid_note_80_to_90(const std::vector<std::vector<double>>& step_sets, int* total) {
+static int mid_note_80_to_90(const std::vector<std::vector<double>>& step_sets, int* total, bool scale = false) {
   int bad = 0;
   *total = 0;
   for (double mid : {80.0, 85.0, 90.0})
@@ -253,7 +267,7 @@ static int mid_note_80_to_90(const std::vector<std::vector<double>>& step_sets, 
           for (int ph = 0; ph < 3; ++ph) {
             std::vector<double> ms{300, 140, mid, 140, 300}, lv{0}, truth;
             for (int i = 0; i < 4; ++i) lv.push_back(lv.back() + st[i]);
-            const auto n = run_case(ms, lv, vib, ph * 2.1, nerr ? 2 : -1, nerr, truth);
+            const auto n = run_case(ms, lv, vib, ph * 2.1, nerr ? 2 : -1, nerr, truth, scale);
             ++*total;
             double worst = 0;
             if (n.size() == 5u)
@@ -281,6 +295,60 @@ TEST(NoteTracker, DISABLED_ShortNoteNextToA150CentStepWithVibratoKnownLimit) {
   int total = 0;
   const int bad = mid_note_80_to_90({{-200, -300, -150, -200}}, &total);
   EXPECT_EQ(bad, 0) << bad << " of " << total;
+}
+
+// ADR 0014: the known limit above, in scale mode. The expected sequence is the played one, so the step into the short note is taken at
+// kHmmSwitchExpected. The free-mode test stays disabled: free mode is unchanged by design.
+TEST(NoteTracker, ShortNoteNextToA150CentStepWithVibratoInScaleMode) {
+  int total = 0;
+  const int bad = mid_note_80_to_90({{-200, -300, -150, -200}}, &total, true);
+  EXPECT_EQ(bad, 0) << bad << " of " << total;
+}
+
+TEST(NoteTracker, ScaleModeKeepsEveryOtherFastRunCase) {
+  int total = 0;
+  const int bad = mid_note_80_to_90({{200, 200, 200, 200}, {200, -200, 300, -150}, {-150, 200, -200, 200}}, &total, true);
+  EXPECT_EQ(bad, 0) << bad << " of " << total;
+}
+
+TEST(NoteTracker, ScaleModeDoesNotInventTheExpectedNoteWhenItIsNotPlayed) {
+  // Expected A4 G4 E4; the player holds A4 and goes straight to E4 (skips G4), with and without vibrato and at several speeds.
+  for (double vib : {0.0, 25.0})
+    for (double mid_ms : {100.0, 150.0, 250.0}) {
+      Driver d;
+      d.expect({69, 67, 64});
+      const int n1 = static_cast<int>(std::lround((300.0 + mid_ms) / 1000.0 / kHop)), n2 = static_cast<int>(std::lround(0.3 / kHop));
+      for (int k = 0; k < n1; ++k) d.voiced(0 + vib * std::sin(2 * testutil::kPi * 5.5 * k * kHop), false, vib > 0 ? 5.5 : 0, 2 * vib);
+      for (int k = 0; k < n2; ++k) d.voiced(-500 + vib * std::sin(2 * testutil::kPi * 5.5 * k * kHop), false, vib > 0 ? 5.5 : 0, 2 * vib);
+      d.silent(21);
+      ASSERT_EQ(d.notes.size(), 2u) << "vibrato " << vib << ", " << mid_ms << " ms";
+      EXPECT_NEAR(d.notes[0].mean_c, 0, 30);
+      EXPECT_NEAR(d.notes[1].mean_c, -500, 30);
+    }
+}
+
+TEST(NoteTracker, NoBiasDecodesExactlyAsFreeMode) {
+  const std::vector<double> ms{300, 120, 90, 140, 300}, lv{0, -200, -500, -650, -850};
+  std::vector<double> t1, t2;
+  const auto a = run_case(ms, lv, 25, 0.7, 2, 2, t1);
+  Driver d;
+  d.tr.set_bias(nullptr, nullptr, 0);
+  int k = 0;
+  for (size_t i = 0; i < ms.size(); ++i) {
+    const int n = static_cast<int>(std::lround(ms[i] / 1000.0 / kHop));
+    for (int q = 0; q < n; ++q, ++k) {
+      double c = lv[i] + 25 * std::sin(2 * testutil::kPi * 5.5 * k * kHop + 0.7);
+      if (static_cast<int>(i) == 2 && q < 2) c -= 1200.0;
+      d.voiced(c, false, 5.5, 50);
+    }
+  }
+  d.silent(21);
+  ASSERT_EQ(a.size(), d.notes.size());
+  for (size_t i = 0; i < a.size(); ++i) {
+    EXPECT_EQ(a[i].t_start, d.notes[i].t_start);
+    EXPECT_EQ(a[i].mean_c, d.notes[i].mean_c);
+    EXPECT_EQ(a[i].frames, d.notes[i].frames);
+  }
 }
 
 TEST(NoteTracker, OctaveErrorFramesInTheMiddleOfARunDoNotMakeOrHideANote) {

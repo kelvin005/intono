@@ -83,7 +83,7 @@ if(INTONO_BUILD_TESTS)
   enable_testing()
   add_executable(intono_tests
     tests/test_ringbuffer.cpp tests/test_filters.cpp tests/test_tuning.cpp
-    tests/test_pitch.cpp tests/test_engine.cpp tests/test_notes.cpp tests/test_worker.cpp)
+    tests/test_pitch.cpp tests/test_engine.cpp tests/test_notes.cpp tests/test_score_cursor.cpp tests/test_worker.cpp)
   target_include_directories(intono_tests PRIVATE src)
   target_compile_options(intono_tests PRIVATE ${INTONO_WARN} ${INTONO_SAN})
   target_link_libraries(intono_tests PRIVATE intono GTest::gtest_main)

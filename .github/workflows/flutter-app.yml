@@ -105,7 +105,7 @@ jobs:
             "$BIN/llvm-readelf" -d "$SO" | grep -q 'Shared library: \[libc++_shared.so\]' || { echo "$abi: libintono_android.so does not need libc++_shared.so"; exit 1; }
             unzip -l "../$APK" | grep -q "lib/$abi/libc++_shared.so" || { echo "$abi: libc++_shared.so is not packaged in the APK"; exit 1; }
             "$BIN/llvm-nm" -D --defined-only "$SO" | awk '$2=="T"{print $3}' | sort > "exported-$abi.txt"
-            for sym in intono_create intono_destroy intono_drone_render intono_drone_set intono_process intono_read_frames intono_read_notes intono_set_tonic; do
+            for sym in intono_create intono_destroy intono_drone_render intono_drone_set intono_process intono_read_frames intono_read_notes intono_set_tonic intono_set_expected; do
               grep -qx "$sym" "exported-$abi.txt" || { echo "$abi: $sym is not exported (dart:ffi could not resolve it)"; exit 1; }
             done
             grep -vE '^(intono_|Java_com_example_intono_)' "exported-$abi.txt" && { echo "$abi: unexpected exports above"; exit 1; } || true
@@ -266,7 +266,7 @@ jobs:
           BINS="$APP/Runner"; [ -f "$APP/Runner.debug.dylib" ] && BINS="$BINS $APP/Runner.debug.dylib"
           nm -gU $BINS 2>/dev/null | grep -E ' T _intono_' | awk '{print $3}' | sort -u | tee exported.txt
           # dart:ffi resolves these with dlsym in the process (DynamicLibrary.process(), ADR 0010)
-          for sym in intono_create intono_destroy intono_drone_render intono_drone_set intono_process intono_read_frames intono_read_notes intono_set_tonic intono_bench_run; do
+          for sym in intono_create intono_destroy intono_drone_render intono_drone_set intono_process intono_read_frames intono_read_notes intono_set_tonic intono_set_expected intono_bench_run; do
             grep -qx "_$sym" exported.txt || { echo "_$sym is not in the app binary"; exit 1; }
           done
       - name: XCTest smoke tests on a booted Simulator (pinned runtime iOS 18.5, iPhone 16)
