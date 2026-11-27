@@ -5,6 +5,7 @@ import 'package:intono_app/src/bench_runner.dart';
 import 'package:intono_app/src/bench_screen.dart';
 
 import 'fake_audio.dart';
+import 'fake_engine.dart';
 
 class FakeRunner implements BenchRunner {
   final calls = <(BenchLibrary, int)>[];
@@ -95,5 +96,62 @@ void main() {
     await tester.pump();
     await tester.tap(find.text('Back'));
     expect(closed, 1);
+  });
+
+  soakTests();
+}
+
+// Soak (ADR 0008 W3/W4 and the polling power cost, ADR 0009 decision 5): written before the implementation.
+void soakTests() {
+  testWidgets('Soak (worker) starts the soak session, polls the engine like the meter, and finishes by itself after the set time',
+      (tester) async {
+    final audio = FakeAudio()..soakReport = 'soak (worker thread): 30.0 min, 48000 Hz\nW3 queue: high-water 9 records';
+    final engine = FakeEngine();
+    await tester.pumpWidget(host(BenchScreen(audio: audio, runner: FakeRunner(), onClose: () {}, engineFactory: (_) => engine)));
+    expect(find.text('Soak 30 min (worker)'), findsOneWidget);
+    expect(find.text('Soak 30 min (inline baseline)'), findsOneWidget);
+
+    await tester.tap(find.text('Soak 30 min (worker)'));
+    await tester.pump();
+    await tester.pump();
+    expect(audio.soakCalls, [(30, false)]);
+    await tester.pump(const Duration(milliseconds: 100));
+    expect(engine.readFramesCalls, greaterThan(0), reason: 'the UI polls frames at vsync, as the meter does, so the soak is representative');
+    expect(find.textContaining('Stop soak'), findsOneWidget);
+
+    await tester.pump(const Duration(minutes: 30));
+    await tester.pump();
+    await tester.pump();
+    expect(audio.finishCalls, 1);
+    final text = tester.widget<Text>(find.byKey(const Key('bench-report'))).data!;
+    expect(text, contains('W3 queue: high-water 9 records'));
+    expect(find.textContaining('Stop soak'), findsNothing);
+  });
+
+  testWidgets('the inline baseline passes inline, and Stop soak ends it early with the report', (tester) async {
+    final audio = FakeAudio()..soakReport = 'soak (inline, no worker: battery baseline): 2.0 min\nstopped early: 2.0 of 30.0 min';
+    await tester.pumpWidget(host(BenchScreen(audio: audio, runner: FakeRunner(), onClose: () {}, engineFactory: (_) => FakeEngine())));
+    await tester.tap(find.text('Soak 30 min (inline baseline)'));
+    await tester.pump();
+    await tester.pump();
+    expect(audio.soakCalls, [(30, true)]);
+    await tester.pump(const Duration(minutes: 2));
+    await tester.tap(find.textContaining('Stop soak'));
+    await tester.pump();
+    await tester.pump();
+    expect(audio.finishCalls, 1);
+    expect(tester.widget<Text>(find.byKey(const Key('bench-report'))).data!, contains('stopped early'));
+    await tester.pump(const Duration(minutes: 30));
+    expect(audio.finishCalls, 1, reason: 'the timer is cancelled once the soak has ended');
+  });
+
+  testWidgets('a soak that cannot start says why', (tester) async {
+    final audio = FakeAudio()..startResult = false;
+    await tester.pumpWidget(host(BenchScreen(audio: audio, runner: FakeRunner(), onClose: () {}, engineFactory: (_) => FakeEngine())));
+    await tester.tap(find.text('Soak 30 min (worker)'));
+    await tester.pump();
+    await tester.pump();
+    await tester.pump();
+    expect(tester.widget<Text>(find.byKey(const Key('bench-report'))).data!, contains('soak: could not start: no microphone permission'));
   });
 }
