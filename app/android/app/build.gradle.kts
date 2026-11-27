@@ -20,6 +20,7 @@ android {
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         ndk {
             // x86_64 is for the CI emulator only; the phone is arm64-v8a.
             abiFilters += listOf("arm64-v8a", "armeabi-v7a", "x86_64")
@@ -42,7 +43,6 @@ android {
             version = "3.22.1"
         }
     }
-    sourceSets.getByName("main").java.srcDir("../../../android/app/src/main/kotlin")
 
     buildFeatures {
         prefab = true
@@ -51,6 +51,11 @@ android {
 
 dependencies {
     implementation("com.google.oboe:oboe:1.9.3")
+
+    testImplementation("junit:junit:4.13.2")
+
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }
 
 kotlin {

@@ -1,0 +1,24 @@
+name: android-shim
+# ADR 0009. Host tests for the Android audio shim (AudioPump, bench core, the guard-off comparison library) with and without sanitizers.
+# The Android build (Gradle, Oboe, JNI, Kotlin unit tests, the emulator smoke test) belongs to the Flutter host and runs in flutter-app.yml
+# since the harness app was retired (ADR 0009 Note 3). Pinned runner labels only; no third-party actions.
+on:
+  workflow_dispatch:
+  push:
+    paths: ["android/shim/**", "dsp/**", ".github/workflows/android-shim.yml"]
+  pull_request:
+    paths: ["android/shim/**", "dsp/**", ".github/workflows/android-shim.yml"]
+
+jobs:
+  shim-host-tests:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [none, address, thread]
+    steps:
+      - uses: actions/checkout@v4
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build cmake
+      - run: cmake -S android/shim -B build -G Ninja -DINTONO_SANITIZE=${{ matrix.sanitizer }} -DINTONO_BENCH_NOGUARD=ON   # the guard-off comparison library builds everywhere; its dlopen test runs in the plain job
+      - run: cmake --build build
+      - run: ctest --test-dir build --output-on-failure   # sanitizer=none also runs the real-time safety test

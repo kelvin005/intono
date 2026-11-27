@@ -112,6 +112,15 @@ Decision 5 defined the input-overrun count as callback gaps larger than 1.5 buff
 - Slow hops (a chunk over 1 ms) are logged with their time, in CLOCK_MONOTONIC seconds like the app's UI-frame log, to attribute spikes (startup, GC, UI work). An arm64 profile APK is built in CI for timing runs.
 - No gate, threshold or contract changes: `intono.h` and the DSP are untouched.
 
+## Note 3 (2026-11-24, with PR 5's last part): the harness is retired
+
+Carries out Note 1. The Flutter app has parity with the harness (start/stop capture, the drone with the headphone policy, the stream facts, now live) and more (meter, bench).
+
+- **Removed:** the harness Gradle project (`android/settings.gradle.kts`, `build.gradle.kts`, `gradle.properties`, `android/app`), its `MainActivity`, the Gradle 8.14.3 / AGP 8.13.0 / Kotlin 2.2.20 pins of Amendment 1 (they applied to the harness only), and the `intono-harness-debug-apk` artifact. The only Android toolchain is the Flutter host's (Note 1).
+- **Moved:** the Kotlin glue (`NativeAudio`, `DronePolicy`, `HeadphoneMonitor`), its JUnit test and the instrumented smoke test now live in `app/android/app/src` (`main`, `test`, `androidTest`). The Flutter app's debug APK is `intono-flutter-debug-apk`, the bench APK `intono-flutter-bench-apk`.
+- **CI:** `android-app.yml` became `android-shim.yml` (host tests of the shim: AudioPump, bench core, comparison library; plain, ASan, TSan). The Gradle build, the Kotlin unit tests, the APK checks and the emulator smoke test run in `flutter-app.yml` (`app` and `android-emulator` jobs). The emulator job frees runner disk first, because Flutter, the SDK and the system image do not fit otherwise.
+- **Deviation from Note 1 (accepted by Kelechi, 2026-11-27):** the C++ shim stays in `android/shim/` rather than moving under `app/android/`. With the Gradle project gone, `android/` holds only that portable C++ directory and no toolchain; its host tests (Linux, ASan, TSan) build it with plain CMake, independently of Gradle, so it is not part of the Flutter host's tree. `app/android` already references it, and moving it would change paths in two workflows, the CMake files and this ADR with no functional change. Revisit only if the iOS port needs a shared native location.
+
 ## Consequences
 
 - New dependencies: Oboe (Google Maven), Flutter SDK and pub packages (`ffi`, `ffigen`, plus the Flutter test SDK), Android Gradle plugin and Kotlin. All pinned, none involves user data.
