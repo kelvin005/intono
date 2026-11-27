@@ -136,3 +136,74 @@ The test now holds its producer back while more than 512 frames are unread, as a
 delay as a regression check. It still checks what it is for: strictly increasing frame times and no loss while both threads run.
 Ring overflow remains covered by the worker and ring tests. **No library code changes**: `dsp/src`, `intono.h`, the gates and the
 thresholds are untouched, and the default build's output is unchanged (bit-identity job).
+
+## Amendment 2 (2026-11-27): device caps from the phone bench; soak and battery deferred to Phase 5
+
+Status: **proposed**, from Kelechi's two bench reports of 2026-11-27. Needs Kelechi's "merge".
+
+### What was measured (bench mode, ADR 0009 decision 5)
+
+Device: Infinix Note 30, Android 14, mid-range MediaTek (the SoC, `adb shell getprop ro.soc.model`, is not read: no adb on this phone).
+Bench APK (arm64 profile build, AOT Dart) of #17's time (before #19), plugged in, Bluetooth off, drone off. Run 1 in a quiet room; run 2
+with Kelechi talking during the capture phase. Hop budget at 48 kHz, hop 256: **5333 us**.
+
+**Worst hop on the generated signal** (3 s 440 Hz tone, 4 s scale, 6 s digital silence; 10 runs x 2437 hops; intrinsic = per-hop
+minimum over the runs, ADR 0008's method; raw = every sample of every run):
+
+| us | run 1 guard ON | run 1 guard OFF | run 2 guard ON | run 2 guard OFF |
+|---|---|---|---|---|
+| intrinsic median / p99 / **max** | 36.2 / 37.8 / **48.4** | 35.3 / 37.0 / 48.6 | 36.6 / 38.5 / **52.3** | 34.8 / 36.4 / 50.5 |
+| intrinsic tone median / max | 37.2 / 48.4 | 36.2 / 48.6 | 37.5 / 52.3 | 35.7 / 50.5 |
+| intrinsic scale median / max | 37.2 / 38.5 | 36.1 / 37.6 | 37.5 / 39.0 | 35.7 / 37.3 |
+| intrinsic silence median / max (denormal case) | 10.5 / 37.3 | 8.7 / 36.4 | 10.5 / 37.8 | 8.7 / 36.0 |
+| raw median / p99 / max | 36.9 / 40.9 / 269.5 | 36.0 / 39.7 / 195.7 | 37.3 / 42.8 / 419.7 | 35.5 / 39.3 / 296.8 |
+
+**Live capture** (10 s, real microphone, product path with the worker): AAudio, **Shared** (Exclusive requested, not granted),
+LowLatency, Unprocessed, 48000 Hz, burst 240, buffer 4096 frames, `latency n/a` (that APK printed no reason; #19 now does).
+
+| | run 1 (quiet) | run 2 (talking) |
+|---|---|---|
+| hop us median / p99 / max | 118.8 / 196.6 / 430.2 (2074 hops) | 118.8 / 204.8 / 334.8 (2082 hops) |
+| slow hops (> 1 ms) | 0 | 0 |
+| callback max us | 438.2 | 336.8 |
+| input gaps (stream position), frames lost | 0, 0 | 0, 0 |
+| stream overruns / output xruns | 0 / 0 | 0 / 0 |
+| late callbacks (wall clock) | 70 | 66 |
+
+### What it says
+
+- **Intrinsic worst hop 52.3 us = 1.0 % of the budget** (both runs, guard ON). The 5 to 8 % figures are the raw and live maxima: one-off
+  spikes (scheduler, frequency changes), not the cost of the hop. No hop of the live capture exceeded 1 ms, so the 1514 us maximum of the
+  first debug-APK run (2026-11-23) did not come back in the AOT build.
+- **The denormal guard costs about 1 to 2 us per hop** (intrinsic medians 36.2 vs 35.3 and 36.6 vs 34.8; silence 10.5 vs 8.7); the maxima
+  are the same within noise. It stays (phase-2-plan decision); this is information.
+- **Late callbacks are not lost audio:** 66 to 70 per 10 s by the wall clock, with 0 position gaps and 0 overruns. This settles ADR 0009
+  Note 2's question for this phone: the wall-clock count measures shared-mode burstiness.
+- **Open, recorded and not explained:** the live hop median (118.8 us) is about 3.3 times the bench median (36 us). The live hop is the
+  same `intono_process` call, with the worker thread alive, the UI rendering at the same time and the CPU at whatever frequency the
+  governor chose; which of these accounts for it is not measured. It is 2.2 % of the budget, so it does not block anything.
+- Exclusive mode was not granted; input latency was not reported (the next run with #19's APK shows Oboe's reason and a lower bound).
+
+### Device cap (proposed; Kelechi decides)
+
+- **W1-device, Infinix Note 30 class:** intrinsic worst hop of the product build (guard ON) **<= 110 us**, that is 2 x the measured 52.3 us,
+  rounded up (headroom for ADR 0006 voice rejection and ADR 0007 multi-candidate tracking), and never above 25 % of the hop budget
+  (1333 us). Re-measured with the bench Run on the same phone after any DSP change.
+- **Live capture, reported, not gated:** hop p99 and max, slow hops (> 1 ms) and gaps stay in every bench report; a slow hop or a gap with
+  lost frames is investigated, not waived.
+- The desktop W1 (<= 100 us) is unchanged. The guard-OFF numbers are information only.
+- **M5 stays open for a low-end phone:** the Note 30 is mid-range; the true low-end 2 GB phone is due before Phase 5 (ADR 0009 answer 1)
+  and gets its own cap from the same measurement.
+
+### Deferred to Phase 5 hardening (Kelechi, 2026-11-27)
+
+The **30-minute soak (W3, W4 on the phone) and the polling power cost** move to Phase 5 hardening. Reason given: the bench shows the
+hop far inside its budget (intrinsic worst 1 %, raw and live maxima 5 to 8 %), so the risk is low. Until then:
+
+- W3 and W4 on a phone are **unmeasured**; the desktop results (Amendment 1: high-water 11, p99 2.15 ms) are the only evidence. The 350 ms
+  note-delay gate is unchanged; W4 is amended to 400 ms only if a phone measurably fails 350 ms.
+- The soak mode is in the app (#17) and is the Phase 5 tool. No adb is available on the phone used (it is the hotspot), so the power
+  comparison will use **manual battery %**: 1 % steps (about 50 mAh on a 5000 mAh battery) and the phone's own estimate, coarser than
+  `batterystats`. Over 30 minutes the poll's cost is likely below that resolution; the in-app **process CPU %** difference (worker minus
+  inline baseline) is the primary figure and battery % the cross-check.
+- The adaptive back-off of the 2 ms poll stays the fallback if the cost turns out significant.
