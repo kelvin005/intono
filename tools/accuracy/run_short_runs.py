@@ -21,10 +21,9 @@ SEALED = {
     "sr1info": dict(seeds=list(range(34101, 34109)), sha="d0301ff2a0ae94da89ac43656cba03403fbbc7662ae8b6d05aeb7b9141e6e8b1", spent=None, min_step=100.0, gated=False),
     # The hard Phase 3 gate (ADR 0014, docs/adr/sealed-p3gate-preregistration.md): score-informed segmentation in scale mode, recall >= 0.995
     # on notes of 100-250 ms with a smaller adjacent centre step of 100-150 cents. Registered 2026-11-27 before any implementation; refused
-    # until the frozen-binary addendum is written (the scale-mode runner landed with the ADR 0014 implementation; gates and seeds unchanged).
+    # until the frozen-binary addendum (written 2026-11-27, before the run; gates and seeds unchanged).
     "p3gate": dict(seeds=list(range(34201, 34217)), sha="10453f5292fda9f51b8bca8014963260fde9c64fe7712e1cc43a7b0f1269a1aa", spent=None,
-                   min_step=100.0, gated=True, scale=True,
-                   pending="the frozen-binary addendum to docs/adr/sealed-p3gate-preregistration.md is not written yet"),
+                   min_step=100.0, gated=True, scale=True),
 }
 GATES = {"recall_ge150": (">=", 0.995), "recall_100_150": (">=", 0.98), "extra_per_200": ("<=", 1.0)}
 # Scale mode (p3gate and --scale dev runs): G-P3 plus the sr1 gates restricted to notes whose smaller step is >= 150 cents.

@@ -73,7 +73,7 @@ Parameters are chosen on dev seeds only: 9501 to 9516 (short runs) and 9521 to 9
 2. **Skip at most one missed note, plus the fallback:** after 3 consecutive notes outside the expected window, plain segmentation until
    2 consecutive notes match an expected position again. The fallback is tested.
 
-## Amendment 1 (proposed 2026-11-27, implementation PR; needs Kelechi's "merge"): cheap entry into the due note, from any state
+## Amendment 1 (approved by Kelechi 2026-11-27, merged in #34): cheap entry into the due note, from any state
 
 **What the dev seeds showed.** Decision 3 as accepted (a cheap switch *from* `expected[k-1]` *into* `expected[k]`) failed the deviation
 gates on dev seeds 9521 to 9536 at the first cost tried (8): 8 invented notes in 1024 (0.78 %, limit 0.5 %), recall of the played
