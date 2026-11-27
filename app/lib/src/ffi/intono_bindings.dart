@@ -165,6 +165,29 @@ class IntonoBindings {
         int Function(ffi.Pointer<intono_engine>, ffi.Pointer<intono_note>, int)
       >();
 
+  void intono_set_expected(
+    ffi.Pointer<intono_engine> arg0,
+    ffi.Pointer<ffi.Int> midi_notes,
+    int n,
+  ) {
+    return _intono_set_expected(arg0, midi_notes, n);
+  }
+
+  late final _intono_set_expectedPtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Void Function(
+            ffi.Pointer<intono_engine>,
+            ffi.Pointer<ffi.Int>,
+            ffi.Int,
+          )
+        >
+      >('intono_set_expected');
+  late final _intono_set_expected = _intono_set_expectedPtr
+      .asFunction<
+        void Function(ffi.Pointer<intono_engine>, ffi.Pointer<ffi.Int>, int)
+      >();
+
   void intono_set_tonic(ffi.Pointer<intono_engine> arg0, int midi_note) {
     return _intono_set_tonic(arg0, midi_note);
   }

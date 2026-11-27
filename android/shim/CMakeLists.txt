@@ -69,7 +69,7 @@ if(ANDROID)
   target_link_libraries(intono_android PRIVATE intono_shim_core oboe::oboe log)
   # libintono is a static archive: keep the whole C API in the library (Dart looks the symbols up with dlsym) and export only
   # intono_*, the JNI entry points and JNI_OnLoad.
-  set(INTONO_API_SYMS intono_create intono_process intono_read_frames intono_read_notes intono_set_tonic intono_drone_set
+  set(INTONO_API_SYMS intono_create intono_process intono_read_frames intono_read_notes intono_set_tonic intono_set_expected intono_drone_set
       intono_drone_render intono_destroy)
   foreach(sym ${INTONO_API_SYMS} intono_bench_run)   # intono_bench_run: the bench entry point Dart looks up (ADR 0009 decision 5)
     target_link_options(intono_android PRIVATE -Wl,--undefined=${sym})

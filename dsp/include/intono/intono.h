@@ -6,9 +6,14 @@
  *   intono_process, intono_drone_render                  audio thread only, real-time safe
  *   intono_read_frames, intono_read_notes                UI thread only
  *   intono_set_tonic, intono_drone_set                   UI thread (atomics, safe against the audio thread)
+ *   intono_set_expected                                  UI thread (copied into preallocated storage; lock-free handoff)
  * Notes (ADR 0008): the engine owns one worker thread, started by intono_create and joined by intono_destroy. It runs the
  * note tracker, so a note may be readable a few milliseconds after the audio-time it is stamped with. The audio thread
  * only queues one small record per hop. No function, struct or field changed.
+ * Scale mode (ADR 0014): intono_set_expected gives the engine the notes the player should play next (MIDI numbers, at most 128;
+ * more are ignored). The note HMM then takes the steps of that sequence just ahead of the player at a lower cost, so short notes
+ * next to small steps are found; after 3 notes that do not follow it, the bias is dropped until 2 notes follow it again.
+ * n = 0 (or NULL) returns to free mode, whose output is unchanged. One function added; no struct or field changed.
  */
 #ifndef INTONO_H
 #define INTONO_H
@@ -60,6 +65,7 @@ INTONO_API void  intono_process(intono_engine*, const float* in, int n);  // aud
 INTONO_API int   intono_read_frames(intono_engine*, intono_frame* out, int max); // UI thread
 INTONO_API int   intono_read_notes(intono_engine*, intono_note* out, int max);   // UI thread
 INTONO_API void  intono_set_tonic(intono_engine*, int midi_note);       // for just/pythagorean
+INTONO_API void  intono_set_expected(intono_engine*, const int* midi_notes, int n); // UI thread; scale mode (ADR 0014), n = 0: free mode
 INTONO_API void  intono_drone_set(intono_engine*, int midi_note, float gain, int timbre);
 INTONO_API void  intono_drone_render(intono_engine*, float* out, int n); // audio thread, RT-safe
 INTONO_API void  intono_destroy(intono_engine*);

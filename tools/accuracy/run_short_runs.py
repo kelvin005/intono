@@ -1,8 +1,11 @@
 """Short-run set (ADR 0004, Amendment 4): runs of 5-7 consecutive legato notes of 100-250 ms.
-usage: python3 -I run_short_runs.py --seeds 9301 9302 [--cli PATH] [--cache DIR]
+usage: python3 -I run_short_runs.py --seeds 9301 9302 [--cli PATH] [--scale]
 Dev seeds are 9xxx. Sealed seeds are registered in SEALED below and refused here: they run through --sealed NAME
 once (the registry refuses a second run). Without --cli the Python mirror ref/stream_ref.py is used.
-Gates (Amendment 4): recall >= 0.995 for notes >= 150 ms, >= 0.98 for 100-150 ms, <= 1 extra note per 200 notes."""
+Gates (Amendment 4): recall >= 0.995 for notes >= 150 ms, >= 0.98 for 100-150 ms, <= 1 extra note per 200 notes.
+--scale (ADR 0014): each phrase's truth MIDI sequence is given to the engine as the expected sequence (intono-cli --expected), as the
+scale screen gives the scale; needs --cli. The p3gate set runs this way and adds the hard gate G-P3 (recall >= 0.995 on notes of
+100-250 ms whose smaller adjacent centre step is 100-150 cents; docs/adr/sealed-p3gate-preregistration.md)."""
 import argparse, io, subprocess, sys, tempfile
 from pathlib import Path
 import numpy as np
@@ -18,19 +21,23 @@ SEALED = {
     "sr1info": dict(seeds=list(range(34101, 34109)), sha="d0301ff2a0ae94da89ac43656cba03403fbbc7662ae8b6d05aeb7b9141e6e8b1", spent=None, min_step=100.0, gated=False),
     # The hard Phase 3 gate (ADR 0014, docs/adr/sealed-p3gate-preregistration.md): score-informed segmentation in scale mode, recall >= 0.995
     # on notes of 100-250 ms with a smaller adjacent centre step of 100-150 cents. Registered 2026-11-27 before any implementation; refused
-    # until the scale-mode runner lands with the ADR 0014 implementation (the registered gates and seeds do not change then).
+    # until the frozen-binary addendum is written (the scale-mode runner landed with the ADR 0014 implementation; gates and seeds unchanged).
     "p3gate": dict(seeds=list(range(34201, 34217)), sha="10453f5292fda9f51b8bca8014963260fde9c64fe7712e1cc43a7b0f1269a1aa", spent=None,
-                   min_step=100.0, gated=True, pending="the scale-mode runner (ADR 0014 implementation) is not written yet"),
+                   min_step=100.0, gated=True, scale=True,
+                   pending="the frozen-binary addendum to docs/adr/sealed-p3gate-preregistration.md is not written yet"),
 }
 GATES = {"recall_ge150": (">=", 0.995), "recall_100_150": (">=", 0.98), "extra_per_200": ("<=", 1.0)}
+# Scale mode (p3gate and --scale dev runs): G-P3 plus the sr1 gates restricted to notes whose smaller step is >= 150 cents.
+SCALE_GATES = {"recall_p3": (">=", 0.995), "recall_ge150": (">=", 0.995), "recall_100_150": (">=", 0.98), "extra_per_200": ("<=", 1.0)}
 LOG = Path(__file__).parent / "reports/phase1/short_run_runs.log"
 
 
-def notes_cli(cli, audio):
+def notes_cli(cli, audio, expected=None):
     with tempfile.TemporaryDirectory() as td:
         wav = Path(td) / "x.wav"
         sf.write(wav, audio, synth.SR, subtype="FLOAT")
-        r = subprocess.run([cli, str(wav), "--notes", "1"], capture_output=True, text=True, check=True)
+        cmd = [cli, str(wav), "--notes", "1"] + (["--expected", ",".join(str(int(m)) for m in expected)] if expected else [])
+        r = subprocess.run(cmd, capture_output=True, text=True, check=True)
     a = np.loadtxt(io.StringIO(r.stdout), delimiter=",", skiprows=1, ndmin=2)
     return [(q[0], int(q[2])) for q in a]
 
@@ -49,12 +56,15 @@ def smaller_step_c(notes, i):
     return min(out) if out else float("inf")
 
 
-def evaluate(seeds, cli=None, verbose=False, min_step_c=150.0, bands=None):
+def evaluate(seeds, cli=None, verbose=False, min_step_c=150.0, bands=None, scale=False):
+    """scale: give the engine each phrase's truth sequence; then b counts only notes with smaller step >= 150 cents (the sr1
+    non-regression scope) and b["p3"] the G-P3 band (100-250 ms, smaller step 100-150 cents)."""
     tot = hit = extra = 0
-    b = {"100-150": [0, 0], "150-200": [0, 0], ">=200": [0, 0]}
+    b = {"100-150": [0, 0], "150-200": [0, 0], ">=200": [0, 0], "p3": [0, 0]}
     for seed in seeds:
         for ph in synth.build_short_run_set(seed, min_step_c=min_step_c):
-            est = notes_cli(cli, ph.audio) if cli else notes_mirror(ph.audio)
+            exp = [t["midi"] for t in ph.notes] if scale else None
+            est = notes_cli(cli, ph.audio, exp) if cli else notes_mirror(ph.audio)
             used = set()
             for ti, t in enumerate(ph.notes):
                 tot += 1
@@ -68,10 +78,14 @@ def evaluate(seeds, cli=None, verbose=False, min_step_c=150.0, bands=None):
                     st = smaller_step_c(ph.notes, ti)
                     bk = "step 100-130" if st < 130 else "step 130-150" if st < 150 else "step >=150"
                     bands.setdefault(bk, [0, 0]); bands[bk][0] += 1; bands[bk][1] += (not found)
-                k = "100-150" if d < 0.15 else "150-200" if d < 0.20 else ">=200"
-                b[k][0] += 1; b[k][1] += (not found)
+                st = smaller_step_c(ph.notes, ti)
+                if scale and 0.10 <= d <= 0.25 and 100.0 <= st < 150.0:
+                    b["p3"][0] += 1; b["p3"][1] += (not found)
+                if not scale or st >= 150.0:
+                    k = "100-150" if d < 0.15 else "150-200" if d < 0.20 else ">=200"
+                    b[k][0] += 1; b[k][1] += (not found)
                 if verbose and not found:
-                    print(f"  miss seed {seed} {ph.meta.get('name', '')} midi {t['midi']} t_on {t['t_on']:.3f} dur {d:.3f}")
+                    print(f"  miss seed {seed} {ph.meta.get('name', '')} midi {t['midi']} t_on {t['t_on']:.3f} dur {d:.3f} step {st:.0f}")
             extra += len(est) - len(used)
     return tot, hit, extra, b
 
@@ -83,6 +97,7 @@ def main():
     ap.add_argument("--cli")
     ap.add_argument("--verbose", action="store_true")
     ap.add_argument("--min-step", type=float, default=150.0, help="smallest centre step in cents (gate scope: 150)")
+    ap.add_argument("--scale", action="store_true", help="scale mode (ADR 0014): give the engine each phrase's truth sequence")
     a = ap.parse_args()
     if a.sealed:
         import datetime, hashlib
@@ -97,29 +112,38 @@ def main():
             sys.exit(f"{a.sealed} seed list does not match its registered hash")
         if LOG.exists() and any(f" set={a.sealed} " in line for line in LOG.read_text().splitlines()):
             sys.exit(f"sealed set '{a.sealed}' has already been run; a sealed set is never reused")
-        seeds, min_step = cfg["seeds"], cfg["min_step"]
+        seeds, min_step, scale = cfg["seeds"], cfg["min_step"], cfg.get("scale", False)
     else:
         if not a.seeds:
             sys.exit("give --seeds (dev, 9000-9999) or --sealed NAME")
         for s_ in a.seeds:
             if not 9000 <= s_ < 10000:
                 sys.exit("dev seeds only (9000-9999) on this entry point")
-        seeds, min_step = a.seeds, a.min_step
+        seeds, min_step, scale = a.seeds, a.min_step, a.scale
+        if scale and not a.cli:
+            sys.exit("--scale needs --cli (the Python mirror has no scale mode)")
     gated = not a.sealed or SEALED[a.sealed]["gated"]
     bands = None if gated else {}
-    tot, hit, extra, b = evaluate(seeds, a.cli, a.verbose, min_step, bands)
+    tot, hit, extra, b = evaluate(seeds, a.cli, a.verbose, min_step, bands, scale)
     ge150 = [sum(b[k][0] for k in (">=200", "150-200")), sum(b[k][1] for k in (">=200", "150-200"))]
-    res = {"recall_ge150": 1 - ge150[1] / ge150[0], "recall_100_150": 1 - b["100-150"][1] / max(b["100-150"][0], 1),
+    res = {"recall_ge150": 1 - ge150[1] / max(ge150[0], 1), "recall_100_150": 1 - b["100-150"][1] / max(b["100-150"][0], 1),
            "extra_per_200": 200 * extra / tot}
+    if scale:
+        res["recall_p3"] = 1 - b["p3"][1] / max(b["p3"][0], 1)
+    gates = SCALE_GATES if scale else GATES
     print(f"seeds {seeds}: truth notes {tot}, recovered {hit} (recall {hit / tot:.4f}), extra notes {extra} ({res['extra_per_200']:.2f} per 200)")
     for k, (n, miss) in b.items():
-        print(f"  {k} ms: {n} notes, {miss} missed, recall {1 - miss / max(n, 1):.4f}")
+        if k == "p3":
+            if scale:
+                print(f"  G-P3 band (100-250 ms, step 100-150 cents): {n} notes, {miss} missed, recall {1 - miss / max(n, 1):.4f}")
+            continue
+        print(f"  {k} ms{' (step >= 150 cents)' if scale else ''}: {n} notes, {miss} missed, recall {1 - miss / max(n, 1):.4f}")
     if not gated:
         print("  informational, no gate: recall by the smaller adjacent centre step")
         for k, (n, miss) in sorted(bands.items()):
             print(f"    {k} cents: {n} notes, {miss} missed, recall {1 - miss / max(n, 1):.4f}")
     ok = True
-    for k, (op, lim) in (GATES.items() if gated else []):
+    for k, (op, lim) in (gates.items() if gated else []):
         good = res[k] >= lim if op == ">=" else res[k] <= lim
         ok &= bool(good)
         print(f"  {k:16s} {op} {lim:<6} got {res[k]:.4f}  {'PASS' if good else 'FAIL'}")
@@ -127,7 +151,7 @@ def main():
         LOG.parent.mkdir(parents=True, exist_ok=True)
         with LOG.open("a") as f:
             f.write(f"{datetime.datetime.now().isoformat(timespec='seconds')} set={a.sealed} seeds={seeds} cli={a.cli} " + " ".join(f"{k}={v:.4f}" for k, v in res.items())
-                    + (f" pass={ok}" if gated else " informational") + (" bands=" + ";".join(f"{k}:{n}/{m}" for k, (n, m) in sorted(bands.items())) if bands else "") + "\n")
+                    + (" scale=1" if scale else "") + (f" pass={ok}" if gated else " informational") + (" bands=" + ";".join(f"{k}:{n}/{m}" for k, (n, m) in sorted(bands.items())) if bands else "") + "\n")
     sys.exit(0 if ok else 1)
 
 

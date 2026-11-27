@@ -60,6 +60,8 @@ Scores the C++ output on the synthetic set with the Phase 0 metrics, checks it f
 - `intono_process`, `intono_drone_render`: audio thread only. No allocation, locks, logging or syscalls.
 - `intono_read_frames`, `intono_read_notes`: UI thread only. A note is emitted when it ends: ~213 ms plus the note HMM's switch delay (at most ~330 ms measured; the limit is 350) after a pitch change, at the frame of an RMS onset, or ~107 ms after the last voiced frame at a phrase end; there is no flush call.
 - `intono_set_tonic`, `intono_drone_set`: UI thread; they reach the audio thread through relaxed atomics.
+- `intono_set_expected` (scale mode, ADR 0014): UI thread; the sequence (at most 128 MIDI numbers) is copied into preallocated atomics
+  and picked up by the tracker through a seqlock, without a lock or an allocation. `n = 0` returns to free mode, whose output is unchanged.
 - `intono_create` / `intono_destroy`: any thread, not real-time. Never destroy while the audio thread is inside `intono_process`.
 - If the UI falls behind by more than 1024 frames (about 5.4 s) new frames are dropped, never overwritten.
 

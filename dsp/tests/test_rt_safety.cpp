@@ -73,11 +73,14 @@ TEST(RtSafety, InstrumentationDetectsMallocNewAndMutex) {
   }
 }
 
-static void run_rt_safety(bool inline_mode) {
+static void run_rt_safety(bool inline_mode, bool scale = false) {
   const intono_config c = cfg();
   intono_engine* e = intono_internal::create(&c, inline_mode);
   ASSERT_NE(e, nullptr);
   intono_set_tonic(e, 62);
+  // Scale mode (ADR 0014): the notes of the signal below, so the cursor advances and the decoder takes the cheap entries.
+  const int expected[] = {55, 81, 69, 64, 65};
+  if (scale) intono_set_expected(e, expected, 5);
   std::vector<intono_frame> buf(64);
   // Cover every code path: silence, noise-floor learning, voiced notes, vibrato, jumps, octave traps, onsets.
   std::vector<float> x(24000, 0.f);
@@ -115,6 +118,7 @@ static void run_rt_safety(bool inline_mode) {
       intono_drone_render(e, drone.data(), static_cast<int>(std::min<size_t>(chunk, drone.size())));
       intono_drone_set(e, 60, 0.4f, 0);  // parameter changes from the UI thread must not lock either
       intono_set_tonic(e, 64);
+      if (scale) intono_set_expected(e, expected, 5);   // a new sequence from the UI thread: copied, no allocation, no lock
     }
   }
   EXPECT_EQ(g_allocs.load(), 0) << "audio-thread call allocated memory";
@@ -133,6 +137,9 @@ static void run_rt_safety(bool inline_mode) {
 TEST(RtSafety, ProcessAndDroneNeverAllocateOrLock) { run_rt_safety(true); }   // the certified inline path: the tracker runs on this thread too
 // M4 (ADR 0008): with the worker alive, the audio thread (this one) must not allocate or lock. The worker is not armed.
 TEST(RtSafety, ProcessAndDroneNeverAllocateOrLockWithWorker) { run_rt_safety(false); }
+// ADR 0014: the same with an expected sequence set (scale mode), on both paths.
+TEST(RtSafety, ScaleModeNeverAllocatesOrLocks) { run_rt_safety(true, true); }
+TEST(RtSafety, ScaleModeNeverAllocatesOrLocksWithWorker) { run_rt_safety(false, true); }
 
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);

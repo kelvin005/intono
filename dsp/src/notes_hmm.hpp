@@ -36,6 +36,11 @@ constexpr int kHmmRing = 256;        // >= kHmmLag + kHmmSearch + kFitBack + kFi
 constexpr int kHmmSearch = 24;       // the boundary may move this many frames back from the HMM's switch ...
 constexpr int kHmmAhead = 24;        // ... or forward (the path can switch early when the old note's vibrato reaches the new state)
 constexpr double kHmmTolerance = 50.0, kHmmSigma = 25.0, kHmmSwitch = 24.0;
+// Scale mode (ADR 0014, Amendment 1): the cost of entering a note due next in the expected sequence. Chosen on dev seeds 9501-9516
+// (short runs) and 9521-9536 (deviations) only, never on the sealed sets p3gate and p3dev: 4, 6 and 8 gave identical dev results;
+// 8 is the weakest bias of that plateau. tools/accuracy/reports/phase3/score_informed_dev.md.
+constexpr double kHmmSwitchExpected = 8.0;
+constexpr int kHmmMaxBias = 4;
 
 // change-point fit
 constexpr int kFitOmegas = 12;       // vibrato rates 3.5, 4.0 ... 9.0 Hz
@@ -73,6 +78,22 @@ class NoteTracker {
   int flush(NoteSummary* out) {
     pending_rms_ = false;
     return open_ ? finish(out) : 0;
+  }
+
+  // Scale mode (ADR 0014): the steps just ahead of the cursor, as MIDI pairs (from, to); the decoder enters each `to` at
+  // kHmmSwitchExpected instead of kHmmSwitch (Amendment 1: from any state; `from` is kept for the cursor's window and the tests)
+  // on the ET grid of the HMM (state = midi - kHmmMidiLo). n = 0: free mode, the decoding is exactly the unbiased one. Pairs outside
+  // the grid are ignored. Takes effect from the next frame.
+  void set_bias(const int* from_midi, const int* to_midi, int n) {
+    nb_ = 0;
+    for (int i = 0; i < n && nb_ < kHmmMaxBias; ++i) {
+      const int a = from_midi[i] - kHmmMidiLo, b = to_midi[i] - kHmmMidiLo;
+      if (a >= 0 && a < kHmmStates && b >= 0 && b < kHmmStates && a != b) {
+        bias_from_[nb_] = a;
+        bias_to_[nb_] = b;
+        ++nb_;
+      }
+    }
   }
 
   // One call per hop. `f.c` (cents re 440 Hz) feeds the note statistics; `cents_a4` (cents re a4_hz) feeds the HMM grid.
@@ -138,6 +159,7 @@ class NoteTracker {
           am = s;
         }
       prev_best_[t] = static_cast<uint8_t>(am);
+      has_via_[t] = 0;
       const double sw = m + kHmmSwitch;
       for (int s = 0; s < kHmmStates; ++s) {
         if (delta_[s] <= sw) {
@@ -148,10 +170,34 @@ class NoteTracker {
           stay_[t][s] = 0;
         }
       }
+      // Scale mode: the notes due next (the targets of the cursor's pairs) may be entered at the lower cost, from whatever state the
+      // best path is in, so a note the player inserts before the due one costs what it costs in free mode (ADR 0014 Amendment 1:
+      // a cheap step only from expected[k-1] swallowed off-scale insertions on the dev seeds). Applied after the unbiased update,
+      // only where it is cheaper; the frame remembers where the entry came from (via_) for the backtrace. Free mode never gets here.
+      if (nb_ > 0) {
+        has_via_[t] = 1;
+        for (int s = 0; s < kHmmStates; ++s) via_[t][s] = 0;
+        for (int q = 0; q < nb_; ++q) {
+          const int b = bias_to_[q];
+          const double cheap = e[b] + m + kHmmSwitchExpected;   // entry into the due note from the best state (ADR 0014 Amendment 1)
+          if (cheap < delta_[b]) {
+            delta_[b] = cheap;
+            stay_[t][b] = 0;
+            via_[t][b] = static_cast<uint8_t>(am + 1);
+          }
+        }
+      }
     }
     double lo = delta_[0];
     for (int s = 1; s < kHmmStates; ++s) lo = std::min(lo, delta_[s]);
     for (int s = 0; s < kHmmStates; ++s) delta_[s] -= lo;   // keep the scores small
+  }
+
+  // The state at frame t-1 on the path that is in state s at frame t (i = t's ring index).
+  int back(int i, int s) const {
+    if (stay_[i][s]) return s;
+    if (has_via_[i] && via_[i][s]) return via_[i][s] - 1;
+    return prev_best_[i];
   }
 
   int best_state() const {
@@ -166,7 +212,7 @@ class NoteTracker {
     int s = best_state();
     for (int t = last; t > k; --t) {
       const int i = t & (kHmmRing - 1);
-      if (!stay_[i][s]) s = prev_best_[i];
+      s = back(i, s);
     }
     return s;
   }
@@ -183,7 +229,7 @@ class NoteTracker {
     for (int t = last; t >= last - span + 1; --t) {
       st[t - (last - span + 1)] = s;
       const int i = t & (kHmmRing - 1);
-      if (!stay_[i][s]) s = prev_best_[i];
+      s = back(i, s);
     }
     const int base = last - span + 1;
     sk = k >= base ? st[k - base] : -1;
@@ -458,7 +504,7 @@ class NoteTracker {
       for (int t = last; t >= committed_; --t) {
         labels[t - committed_] = s;
         const int i = t & (kHmmRing - 1);
-        if (!stay_[i][s]) s = prev_best_[i];
+        s = back(i, s);
       }
       for (int k = committed_; k <= last; ++k) n_out += commit(k, labels[k - committed_], last, out + n_out, true);
     }
@@ -478,6 +524,10 @@ class NoteTracker {
   double delta_[kHmmStates] = {};
   uint8_t stay_[kHmmRing][kHmmStates] = {};
   uint8_t prev_best_[kHmmRing] = {};
+  // scale mode (ADR 0014)
+  int nb_ = 0, bias_from_[kHmmMaxBias] = {}, bias_to_[kHmmMaxBias] = {};
+  uint8_t has_via_[kHmmRing] = {};
+  uint8_t via_[kHmmRing][kHmmStates] = {};   // 1 + the state a cheap step came from, 0 = none
   Slot ring_[kHmmRing];
   // change-point fit scratch (preallocated)
   double pre_[kFitOmegas][kFitMax + 1][7] = {};

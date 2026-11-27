@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <string>
+#include <sstream>
 #include <vector>
 
 #include "engine_internal.hpp"
@@ -81,7 +82,7 @@ bool read_wav(const char* path, Wav& w) {
 
 int main(int argc, char** argv) {
   if (argc < 2) {
-    std::fprintf(stderr, "usage: %s file.wav [--a4 Hz] [--tuning 0|1|2] [--tonic midi] [--chunk n] [--min-hz Hz] [--max-hz Hz] [--bench N] [--notes 1]\n", argv[0]);
+    std::fprintf(stderr, "usage: %s file.wav [--a4 Hz] [--tuning 0|1|2] [--tonic midi] [--chunk n] [--min-hz Hz] [--max-hz Hz] [--bench N] [--notes 1] [--expected m,m,...]\n", argv[0]);
     return 2;
   }
   intono_config cfg{};
@@ -89,6 +90,7 @@ int main(int argc, char** argv) {
   int tonic = 60, chunk = 128, bench = 0;
   bool notes_mode = false, threaded = false;
   int stall_us = 0;
+  std::vector<int> expected;
   for (int i = 2; i + 1 < argc; i += 2) {
     const std::string k = argv[i];
     const char* v = argv[i + 1];
@@ -102,6 +104,11 @@ int main(int argc, char** argv) {
     else if (k == "--notes") notes_mode = std::atoi(v) != 0;
     else if (k == "--threaded") threaded = std::atoi(v) != 0;
     else if (k == "--stall") stall_us = std::atoi(v);
+    else if (k == "--expected") {   // scale mode (ADR 0014): comma-separated MIDI numbers
+      std::stringstream ss(v);
+      std::string tok;
+      while (std::getline(ss, tok, ',')) if (!tok.empty()) expected.push_back(std::atoi(tok.c_str()));
+    }
     else { std::fprintf(stderr, "unknown option %s\n", k.c_str()); return 2; }
   }
   Wav w;
@@ -112,6 +119,7 @@ int main(int argc, char** argv) {
   if (e && stall_us > 0) intono_internal::set_worker_stall(e, stall_us, 12345u);
   if (!e) { std::fprintf(stderr, "invalid configuration\n"); return 1; }
   intono_set_tonic(e, tonic);
+  if (!expected.empty()) intono_set_expected(e, expected.data(), static_cast<int>(expected.size()));
 
   if (notes_mode) w.mono.resize(w.mono.size() + static_cast<size_t>(0.2 * w.sample_rate), 0.f);  // lets the last note close
   std::vector<intono_frame> out(256);

@@ -23,10 +23,10 @@ struct RunnerTests {
 
   @Test func theCApiDartUsesResolvesInTheProcess() {
     for name in ["intono_create", "intono_destroy", "intono_process", "intono_read_frames", "intono_read_notes", "intono_set_tonic",
-                 "intono_drone_set", "intono_drone_render", "intono_bench_run"] {
+                 "intono_set_expected", "intono_drone_set", "intono_drone_render", "intono_bench_run"] {
       #expect(dlsym(rtldDefault, name) != nil, "\(name) must resolve with dlsym (DynamicLibrary.process())")
     }
-    #expect(sym("intono_ios_link_c_api", IntFn.self)?() == 9)
+    #expect(sym("intono_ios_link_c_api", IntFn.self)?() == 10)
   }
 
   @Test func engineCreateProcessReadDestroyWithAGeneratedTone() {

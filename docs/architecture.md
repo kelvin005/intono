@@ -539,6 +539,7 @@ void  intono_process(intono_engine*, const float* in, int n);  // audio thread, 
 int   intono_read_frames(intono_engine*, intono_frame* out, int max); // UI thread
 int   intono_read_notes(intono_engine*, intono_note* out, int max);   // UI/background thread; 64-entry ring
 void  intono_set_tonic(intono_engine*, int midi_note);       // for just/pythagorean
+void  intono_set_expected(intono_engine*, const int* midi_notes, int n); // UI thread; scale mode (ADR 0014), n = 0: free mode
 void  intono_drone_set(intono_engine*, int midi_note, float gain, int timbre);
 void  intono_drone_render(intono_engine*, float* out, int n); // audio thread, RT-safe
 void  intono_destroy(intono_engine*);

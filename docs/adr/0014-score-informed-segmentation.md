@@ -72,3 +72,36 @@ Parameters are chosen on dev seeds only: 9501 to 9516 (short runs) and 9521 to 9
    note is worse than a missed one, so this gate is as hard as the recall gate.
 2. **Skip at most one missed note, plus the fallback:** after 3 consecutive notes outside the expected window, plain segmentation until
    2 consecutive notes match an expected position again. The fallback is tested.
+
+## Amendment 1 (proposed 2026-11-27, implementation PR; needs Kelechi's "merge"): cheap entry into the due note, from any state
+
+**What the dev seeds showed.** Decision 3 as accepted (a cheap switch *from* `expected[k-1]` *into* `expected[k]`) failed the deviation
+gates on dev seeds 9521 to 9536 at the first cost tried (8): 8 invented notes in 1024 (0.78 %, limit 0.5 %), recall of the played
+deviation notes 0.978 (limit 0.98). All 8 were off-scale insertions: the player puts a note X before the due note E[p]. Decoding
+E[p-1] -> X -> E[p] costs two full switches (48), decoding E[p-1] -> E[p] one cheap one, so an X within a semitone of E[p] was absorbed
+into an E[p] that starts early (the scoring counts that as inventing E[p]). Raising the cost trades one gate for the other, and no value
+passes both with margin:
+
+| Cost (step rule) | G-P3 band recall (1043 notes) | invented (of 1024) | deviation recall |
+|---|---|---|---|
+| 8 | 0.9981 | 8 | 0.9779 |
+| 12 | 0.9952 | 3 | 0.9909 |
+| 16 | 0.9923 | 2 | 0.9948 |
+| 20 | 0.9837 | 0 | 0.9974 |
+
+**The change.** Decision 3 becomes: while the bias is on, **entering the state of a note due next** (`expected[k]`, or `expected[k+1]`
+for the one allowed skip; the targets of the cursor's window) costs `kHmmSwitchExpected` **from whatever state the best path is in**,
+instead of only from the state of `expected[k-1]`. An inserted note then costs what it costs in free mode (one full switch in, one cheap
+switch out), so the bias no longer pays for swallowing it. Everything else in decision 3 is unchanged: emission, tolerance, sigma, the
+fixed lag, the change-point fit and the glitch rule; one parameter; free mode byte-identical. The cursor (decision 2) is unchanged.
+
+| Cost (entry rule) | G-P3 band recall | invented | deviation recall | extra notes per 200 |
+|---|---|---|---|---|
+| 4, 6, 8 (identical) | **0.9981** (2 misses) | **0** | **0.9987** | 0.14 |
+| 12 | 0.9952 | 0 | 0.9987 | 0.07 |
+| 16 | 0.9847 | 0 | 0.9987 | 0.35 |
+
+**Chosen: `kHmmSwitchExpected` = 8**, the weakest bias on the plateau where 4, 6 and 8 give identical results (dev seeds only). The two
+remaining misses are 100 and 111 ms notes at a 100 and 101 cent step, the corner of the gated band. Unit test
+`ScaleMode.AnOffScaleNoteInsertedBeforeTheDueNoteIsReportedAsPlayed` fails with the step rule and passes with the entry rule.
+Report: `tools/accuracy/reports/phase3/score_informed_dev.md`.

@@ -98,7 +98,7 @@ jobs:
           "$BIN/llvm-nm" -D --defined-only "$SO" | awk '$2=="T"{print $3}' | sort > exported.txt
           cat exported.txt
           printf '%s\n' intono_create intono_destroy intono_drone_render intono_drone_set intono_process \
-            intono_read_frames intono_read_notes intono_set_tonic | sort > expected.txt
+            intono_read_frames intono_read_notes intono_set_expected intono_set_tonic | sort > expected.txt
           diff expected.txt exported.txt
           # The standalone libintono.so keeps the static STL. The app's libintono_android.so uses the shared STL because Oboe's Prefab
           # package requires it (ADR 0009 Amendment 1); that is checked in the app's workflow, which requires libc++_shared.so there.
