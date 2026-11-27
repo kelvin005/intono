@@ -15,6 +15,11 @@ from what was recorded) and exits 1 on any difference:
   INPUT DRIFT  the synthetic input itself differs (a numpy/scipy change in synth.py's generation): the test is invalid, not failed by
                the DSP. Pin the versions recorded in the manifest's "env", or regenerate from the tag (dsp.yml, golden-provenance).
 
+CPU independence (format 2): numpy picks some ufunc kernels (sin, exp, ...) by CPU at run time, and its AVX-512 kernels round
+differently from the baseline/AVX2 ones, so synth.py made 30 of the 144 clips (the noisy ones) differently on runners with and without
+AVX-512 (golden-provenance, #34). This script runs numpy on its x86-64 baseline kernels only (NPY_ENABLE_CPU_FEATURES=X86_V2, set below
+before numpy is imported, and checked after), which are the same code on every x86-64 CPU. x86-64 only: another machine is refused.
+
 The threaded CLI waits for the worker after every chunk (the 2 ms poll, ADR 0008), so a threaded run takes about as long as the audio.
 It is sleep-bound, not CPU-bound, hence --jobs well above the core count.
 """
@@ -28,15 +33,26 @@ import sys
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 
-import numpy as np
-import scipy
-import soundfile as sf
+if platform.machine() not in ("x86_64", "AMD64"):
+    sys.exit(f"golden.py runs on x86-64 only (numpy baseline kernels, format 2); this is {platform.machine()}")
+if "numpy" in sys.modules and os.environ.get("NPY_ENABLE_CPU_FEATURES") != "X86_V2":
+    sys.exit("numpy was imported before golden.py could pin its CPU features")
+os.environ["NPY_ENABLE_CPU_FEATURES"] = "X86_V2"
+
+import numpy as np  # noqa: E402
+import scipy  # noqa: E402
+import soundfile as sf  # noqa: E402
+from numpy._core import _multiarray_umath as _npu  # noqa: E402
+
+_ON = [k for k in _npu.__cpu_dispatch__ if _npu.__cpu_features__.get(k)]
+if _ON:
+    sys.exit(f"numpy dispatches {_ON} despite NPY_ENABLE_CPU_FEATURES=X86_V2: the inputs would depend on the CPU")
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "ref"))
 import synth  # noqa: E402
 
-FORMAT = 1
+FORMAT = 2   # 2: inputs made with numpy's baseline kernels only (CPU-independent)
 
 
 def corpus(seeds, pad, limit):
@@ -88,7 +104,7 @@ def make(a):
         "source": a.source,
         "generator": "tools/accuracy/golden.py make",
         "env": {"python": platform.python_version(), "numpy": np.__version__, "scipy": scipy.__version__,
-                "machine": platform.machine(), "system": platform.system()},
+                "machine": platform.machine(), "system": platform.system(), "numpy_cpu_features": "X86_V2 (baseline only)"},
         "seeds": a.seeds, "pad_s": a.pad, "limit": a.limit,
         "cases": [{"clip": n, "pad": p, "input_sha256": sha(x.tobytes()),
                    "out": {mode: inline[(i, mode)] for mode in ("frames", "notes")}}
