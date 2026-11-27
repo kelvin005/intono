@@ -1,6 +1,6 @@
 # ADR 0010: iOS app architecture for Phase 2 (AVAudioEngine shim, Simulator-only CI, TestFlight before launch)
 
-Status: **Proposed** (2026-11-27). Needs Kelechi's answers to the questions at the end, then "merge". Amendments by ADR only.
+Status: **Accepted** (Kelechi, 2026-11-27: the three questions answered below). Amendments by ADR only.
 
 ## Context
 
@@ -113,6 +113,13 @@ No signing identity, provisioning profile or Apple account is used in CI. No IPA
    is to move `audio_pump`, `bench` and `soak` to a neutral `native/` directory now. Recommendation: in place now; move only if a third
    platform appears.
 3. **Apple Developer Program:** needed for TestFlight. Enrol only when the pre-launch milestone starts (recommended), or earlier?
+
+## Answers (Kelechi, 2026-11-27)
+
+1. **Yes:** the iOS part of Phase 2 closes on Simulator evidence (`phase2-ios-sim-complete`). Every iOS device number, including the iOS
+   caps for the audio thread, waits for the TestFlight milestone.
+2. **In place:** the iOS build compiles the portable core from `android/shim/src/`; nothing moves.
+3. **Apple Developer Program enrolment waits until the TestFlight milestone starts.**
 
 ## Consequences
 

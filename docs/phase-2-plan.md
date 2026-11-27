@@ -48,8 +48,8 @@ The true low-end 2 GB device is still due before Phase 5 (ADR 0009 answer 1); th
   `AudioPump` as Android) and tested **on the iOS Simulator in CI only**.
 - **Real-iPhone testing moves to just before the iOS launch, through TestFlight.** Until then no iOS number comes from a device; the iOS
   device caps and the ADR 0008 measurements on an iPhone are taken in that pre-launch milestone.
-- Phase 2's iOS part closes on Simulator evidence (`phase2-ios-sim-complete`: build, symbol checks, XCTest smoke tests green), subject to
-  ADR 0010's questions.
+- Phase 2's iOS part closes on Simulator evidence (`phase2-ios-sim-complete`: build, symbol checks, XCTest smoke tests green). The shared
+  C++ stays in `android/shim/src/`; Apple Developer Program enrolment waits until the TestFlight milestone (ADR 0010 answers).
 
 ## Device results (Kelechi, Infinix Note 30, Android 14)
 
