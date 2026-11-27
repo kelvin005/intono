@@ -4,9 +4,9 @@ name: flutter-app
 on:
   workflow_dispatch:
   push:
-    paths: ["app/**", "dsp/include/intono/intono.h", ".github/workflows/flutter-app.yml"]
+    paths: ["app/**", "android/shim/**", "android/app/src/main/kotlin/**", "dsp/**", ".github/workflows/flutter-app.yml"]
   pull_request:
-    paths: ["app/**", "dsp/include/intono/intono.h", ".github/workflows/flutter-app.yml"]
+    paths: ["app/**", "android/shim/**", "android/app/src/main/kotlin/**", "dsp/**", ".github/workflows/flutter-app.yml"]
 
 jobs:
   app:
@@ -91,9 +91,28 @@ jobs:
           done
       - uses: actions/upload-artifact@v4
         with: { name: intono-flutter-debug-apk, path: app/build/app/outputs/flutter-apk/app-debug.apk }
-      - name: Build the profile APK (arm64 only)
+      - name: Build the bench APK (profile, arm64 only, with the guard-off comparison library)
         # The debug APK runs Dart in JIT and loads the audio thread's CPU with UI work; timing on the phone is judged on this AOT build.
+        # INTONO_BENCH=1 adds libintono_bench_noguard.so (ADR 0009 answer 4); no other build contains it.
         working-directory: app
+        env: { INTONO_BENCH: "1" }
         run: flutter build apk --profile --target-platform android-arm64
+      - name: Check the bench APK
+        run: |
+          SDK="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          BIN="$SDK/ndk/30.0.16248370/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          APK=app/build/app/outputs/flutter-apk/app-profile.apk
+          mkdir -p bench-apk && cd bench-apk && unzip -q -o "../$APK"
+          SO=lib/arm64-v8a/libintono_bench_noguard.so
+          [ -f "$SO" ] || { echo "the bench APK lacks $SO"; exit 1; }
+          "$BIN/llvm-nm" -D --defined-only "$SO" | awk '$2=="T"{print $3}' | sort > exports.txt; cat exports.txt
+          [ "$(cat exports.txt)" = "intono_bench_run" ] || { echo "the comparison library must export intono_bench_run and nothing else"; exit 1; }
+          "$BIN/llvm-readelf" -lW "$SO" | awk '$1=="LOAD"{print $NF}' | while read a; do
+            [ $((a)) -ge 16384 ] || { echo "LOAD segment aligned to $a, need 0x4000"; exit 1; }
+          done
+          "$BIN/llvm-nm" -D --defined-only lib/arm64-v8a/libintono_android.so | awk '{print $3}' | grep -qx intono_bench_run || { echo "the shim does not export intono_bench_run"; exit 1; }
+      - name: The ordinary debug APK must not carry the comparison library
+        run: |
+          if unzip -l app/build/app/outputs/flutter-apk/app-debug.apk | grep -q libintono_bench_noguard; then echo "libintono_bench_noguard.so is in the debug APK"; exit 1; fi
       - uses: actions/upload-artifact@v4
-        with: { name: intono-flutter-profile-apk, path: app/build/app/outputs/flutter-apk/app-profile.apk }
+        with: { name: intono-flutter-bench-apk, path: app/build/app/outputs/flutter-apk/app-profile.apk }

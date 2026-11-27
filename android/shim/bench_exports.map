@@ -1,0 +1,6 @@
+{
+  global:
+    intono_bench_run;
+  local:
+    *;
+};

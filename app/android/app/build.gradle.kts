@@ -28,6 +28,9 @@ android {
             cmake {
                 // Oboe's Prefab package ships only libc++_shared builds, so the shim uses the shared STL (ADR 0009 Amendment 1).
                 arguments += listOf("-DANDROID_STL=c++_shared", "-DANDROID_ARM_NEON=ON", "-DCMAKE_BUILD_TYPE=Release")
+                // The bench APK also carries libintono_bench_noguard.so (denormal guard OFF) for the on-device comparison, information
+                // only (ADR 0009 answer 4). Set INTONO_BENCH=1 in the environment of that build; no other build contains it.
+                if (System.getenv("INTONO_BENCH") == "1") arguments += "-DINTONO_BENCH_NOGUARD=ON"
             }
         }
     }

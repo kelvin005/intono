@@ -30,12 +30,35 @@ else()
   set(SHIM_SAN "")
 endif()
 
-add_library(intono_shim_core STATIC src/audio_pump.cpp)
+add_library(intono_shim_core STATIC src/audio_pump.cpp src/bench.cpp)
 target_include_directories(intono_shim_core PUBLIC src)
 target_compile_options(intono_shim_core PRIVATE ${SHIM_WARN} ${SHIM_SAN})
 target_link_libraries(intono_shim_core PUBLIC intono)
 if(SHIM_SAN)
   target_link_options(intono_shim_core PUBLIC ${SHIM_SAN})
+endif()
+
+# ---- Bench comparison library: libintono with the denormal guard OFF + the bench entry point (ADR 0009 answer 4) ----------------------
+# Information only, shipped in the bench APK and never in a release: it exports intono_bench_run and nothing else.
+option(INTONO_BENCH_NOGUARD "Also build libintono_bench_noguard (guard OFF) for the bench-mode comparison" OFF)
+if(INTONO_BENCH_NOGUARD)
+  find_package(Threads REQUIRED)
+  set(INTONO_DSP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../dsp)
+  add_library(intono_noguard STATIC ${INTONO_DSP_DIR}/src/engine.cpp)
+  target_include_directories(intono_noguard PUBLIC ${INTONO_DSP_DIR}/include PRIVATE ${INTONO_DSP_DIR}/src)
+  target_compile_definitions(intono_noguard PUBLIC INTONO_DENORMAL_GUARD=0)
+  target_compile_options(intono_noguard PRIVATE ${SHIM_WARN} ${SHIM_SAN})
+  target_link_libraries(intono_noguard PUBLIC pffft Threads::Threads)
+  add_library(intono_bench_noguard SHARED src/bench.cpp)
+  target_include_directories(intono_bench_noguard PRIVATE src)
+  target_compile_options(intono_bench_noguard PRIVATE ${SHIM_WARN} ${SHIM_SAN})
+  target_link_libraries(intono_bench_noguard PRIVATE intono_noguard)
+  if(UNIX AND NOT APPLE)
+    target_link_options(intono_bench_noguard PRIVATE -Wl,--version-script=${CMAKE_CURRENT_SOURCE_DIR}/bench_exports.map -Wl,--exclude-libs,ALL)
+  endif()
+  if(ANDROID)
+    target_link_options(intono_bench_noguard PRIVATE -Wl,-z,max-page-size=16384)
+  endif()
 endif()
 
 # ---- Android library: libintono + AudioPump + Oboe streams + JNI (built by Gradle, ADR 0009) -----------------------------------
@@ -48,7 +71,7 @@ if(ANDROID)
   # intono_*, the JNI entry points and JNI_OnLoad.
   set(INTONO_API_SYMS intono_create intono_process intono_read_frames intono_read_notes intono_set_tonic intono_drone_set
       intono_drone_render intono_destroy)
-  foreach(sym ${INTONO_API_SYMS})
+  foreach(sym ${INTONO_API_SYMS} intono_bench_run)   # intono_bench_run: the bench entry point Dart looks up (ADR 0009 decision 5)
     target_link_options(intono_android PRIVATE -Wl,--undefined=${sym})
   endforeach()
   target_link_options(intono_android PRIVATE
@@ -63,10 +86,18 @@ if(INTONO_SHIM_BUILD_TESTS)
   FetchContent_MakeAvailable(googletest)
   enable_testing()
 
-  add_executable(intono_shim_tests tests/test_audio_pump.cpp)
+  add_executable(intono_shim_tests tests/test_audio_pump.cpp tests/test_bench.cpp)
   target_compile_options(intono_shim_tests PRIVATE ${SHIM_WARN} ${SHIM_SAN})
   target_link_libraries(intono_shim_tests PRIVATE intono_shim_core GTest::gtest_main)
   add_test(NAME intono_shim_tests COMMAND intono_shim_tests)
+
+  if(INTONO_BENCH_NOGUARD AND UNIX AND NOT APPLE AND NOT ANDROID AND NOT SHIM_SAN)
+    add_executable(intono_bench_libs_tests tests/test_bench_libs.cpp)
+    target_compile_options(intono_bench_libs_tests PRIVATE ${SHIM_WARN})
+    target_compile_definitions(intono_bench_libs_tests PRIVATE INTONO_BENCH_NOGUARD_LIB="$<TARGET_FILE:intono_bench_noguard>")
+    target_link_libraries(intono_bench_libs_tests PRIVATE intono_shim_core GTest::gtest_main ${CMAKE_DL_LIBS})
+    add_test(NAME intono_bench_libs_tests COMMAND intono_bench_libs_tests)
+  endif()
 
   # Same instrumentation as dsp/tests/test_rt_safety.cpp: fails if the pump allocates or locks on the audio thread.
   if(NOT SHIM_SAN AND UNIX AND NOT APPLE AND NOT ANDROID)

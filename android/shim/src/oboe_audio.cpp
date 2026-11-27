@@ -150,17 +150,26 @@ std::string OboeSession::info() {
   std::lock_guard<std::mutex> lock(mu_);
   char buf[1024];
   std::string s;
+  const auto latency = [&](oboe::AudioStream& st, char* out, size_t cap) {   // from the stream's own timestamps; not available right after start
+    const auto l = st.calculateLatencyMillis();
+    if (l) std::snprintf(out, cap, ", latency %.1f ms", l.value());
+    else std::snprintf(out, cap, ", latency n/a");
+  };
   if (in_) {
-    std::snprintf(buf, sizeof buf, "input: %s, %s, %s, preset %s, %d Hz, burst %d, buffer %d%s\n",
+    char lat[48];
+    latency(*in_, lat, sizeof lat);
+    std::snprintf(buf, sizeof buf, "input: %s, %s, %s, preset %s, %d Hz, burst %d, buffer %d%s%s\n",
                   oboe::convertToText(in_->getAudioApi()), oboe::convertToText(in_->getSharingMode()),
                   oboe::convertToText(in_->getPerformanceMode()), oboe::convertToText(in_->getInputPreset()), in_->getSampleRate(),
-                  in_->getFramesPerBurst(), in_->getBufferSizeInFrames(), input_lost_.load() ? ", LOST" : "");
+                  in_->getFramesPerBurst(), in_->getBufferSizeInFrames(), lat, input_lost_.load() ? ", LOST" : "");
     s += buf;
   }
   if (out_) {
-    std::snprintf(buf, sizeof buf, "output: %s, %s, %s, %d Hz, burst %d, buffer %d%s\n", oboe::convertToText(out_->getAudioApi()),
+    char lat[48];
+    latency(*out_, lat, sizeof lat);
+    std::snprintf(buf, sizeof buf, "output: %s, %s, %s, %d Hz, burst %d, buffer %d%s%s\n", oboe::convertToText(out_->getAudioApi()),
                   oboe::convertToText(out_->getSharingMode()), oboe::convertToText(out_->getPerformanceMode()), out_->getSampleRate(),
-                  out_->getFramesPerBurst(), out_->getBufferSizeInFrames(), output_lost_.load() ? ", LOST" : "");
+                  out_->getFramesPerBurst(), out_->getBufferSizeInFrames(), lat, output_lost_.load() ? ", LOST" : "");
     s += buf;
   } else {
     s += "output: drone off\n";

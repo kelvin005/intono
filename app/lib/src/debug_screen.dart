@@ -11,16 +11,20 @@ import 'frame_poller.dart';
 import 'jank_log.dart';
 import 'meter_state.dart';
 import 'meter_view.dart';
+import 'ui_button.dart';
 
 typedef EngineFactory = EngineApi Function(int enginePointer);
 
 /// The Phase 2 screen: live meter (note, cents, needle) over the Start/Stop and drone controls and the stream facts. It also carries what
 /// the Android harness shows, so the harness can be retired (ADR 0009 Note 1).
 class DebugScreen extends StatefulWidget {
-  const DebugScreen({super.key, required this.audio, required this.engineFactory});
+  const DebugScreen({super.key, required this.audio, required this.engineFactory, this.onOpenBench});
 
   final AudioControl audio;
   final EngineFactory engineFactory;
+
+  /// Called after a long press on the version label (capture is stopped first). Null: no bench in this build.
+  final VoidCallback? onOpenBench;
 
   @override
   State<DebugScreen> createState() => _DebugScreenState();
@@ -149,6 +153,13 @@ class _DebugScreenState extends State<DebugScreen> with TickerProviderStateMixin
     });
   }
 
+  Future<void> _openBench() async {
+    final open = widget.onOpenBench;
+    if (open == null) return;
+    await _stop();   // the bench needs the device quiet, and the engine must not outlive its stream
+    if (mounted) open();
+  }
+
   Future<void> _toggleDrone() async {
     final now = DronePolicy.decide(_userDrone, _headphones).play;
     _userDrone = !now;
@@ -183,12 +194,18 @@ class _DebugScreenState extends State<DebugScreen> with TickerProviderStateMixin
                   builder: (context, s, _) => Center(child: MeterView(state: s)),
                 ),
                 const SizedBox(height: 16),
-                _Button(label: _running ? 'Stop' : 'Start', onTap: _running ? _stop : _start),
+                AppButton(label: _running ? 'Stop' : 'Start', onTap: _running ? _stop : _start),
                 const SizedBox(height: 12),
-                _Button(label: 'Drone: ${drone.play ? 'on' : 'off'}', onTap: _toggleDrone),
+                AppButton(label: 'Drone: ${drone.play ? 'on' : 'off'}', onTap: _toggleDrone),
                 if (drone.warnSpeaker) const Padding(padding: EdgeInsets.only(top: 8), child: Text(DronePolicy.speakerWarning)),
                 const SizedBox(height: 16),
                 GestureDetector(onTap: _refreshInfo, child: Text(_jank.text.isEmpty ? _info : '$_info\n${_jank.text}')),
+                const SizedBox(height: 24),
+                GestureDetector(
+                  key: const Key('version-label'),
+                  onLongPress: _openBench,
+                  child: const Text('Intono 0.1.0 (phase 2)', style: TextStyle(color: Color(0xFF6B7885), fontSize: 12)),
+                ),
               ],
             ),
             ),
@@ -202,22 +219,4 @@ class _DebugScreenState extends State<DebugScreen> with TickerProviderStateMixin
 /// Implemented by engines that own native buffers.
 abstract interface class Disposable {
   void dispose();
-}
-
-class _Button extends StatelessWidget {
-  const _Button({required this.label, required this.onTap});
-
-  final String label;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) => GestureDetector(
-        behavior: HitTestBehavior.opaque,
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(border: Border.all(color: const Color(0xFF6B7885)), borderRadius: BorderRadius.circular(8)),
-          child: Text(label),
-        ),
-      );
 }
