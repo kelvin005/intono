@@ -85,3 +85,37 @@ it cannot show the engine inventing one; this set does.
   reports the expected note at every deviation scores 16 of 16 invented.
 - Same protocol as p3gate: the addendum before the run records the frozen binary and the final runner hash; one run; reported as
   measured; a failed set is never reused.
+
+## Addendum: frozen binary and hashes (2026-11-27, written before either sealed run)
+
+Neither p3gate nor p3dev has been generated or run before this addendum. The parameters were chosen on the dev seeds only:
+`kHmmSwitchExpected` = 8 with the entry rule (ADR 0014 Amendment 1, approved by Kelechi 2026-11-27). Dev results are in
+`tools/accuracy/reports/phase3/score_informed_dev.md`: G-P3 0.9981, invented 0 of 1024, deviation recall 0.9987.
+
+- **Source:** `main` at `fc29130`, the merge of #34. Built in a clean worktree with `cmake -G Ninja -DCMAKE_BUILD_TYPE=Release
+  -DINTONO_BUILD_TESTS=OFF`, GCC 13.3.0, CMake 3.28.3, Linux x86-64.
+- **Frozen binary:** `/home/claude/frozen/intono-cli-fc29130` (read-only), sha256
+  **9e77f56f1519f40c126c4b9a9ccd61a1f6ad7ca85f1f188a2688c5599d7d00f7**.
+  - Check before the run: the golden manifest in free mode gives 288 comparisons, 0 differ.
+  - Check before the run: dev seed 9507 in scale mode gives the dev result.
+- **Source hashes at `fc29130`:**
+
+  | File | sha256 |
+  |---|---|
+  | `dsp/src/notes_hmm.hpp` | 49ed070fe1344d16e9066e5821e07653a959b8facb6d22fb1e0bd40de6960aab |
+  | `dsp/src/score_cursor.hpp` | aeeca312b49afda316cf1672b8f5777fa3682bb3143531bba64b90966fa5f1c1 |
+  | `dsp/src/engine.cpp` | e09e246c6c56614e41e789ce3164a47e4f0d8051e41796a1ab1cd3da4dfc7b09 |
+  | `dsp/include/intono/intono.h` | 489440d97308399a7a15ad10b1636e9961ea990c45c0f3a199902c8ef9eb0a4e |
+  | `tools/accuracy/ref/synth.py` | 162a48efca0b97ec56c4435991a44102b496410a3b1dd97cf2f33aff7f9862fa (unchanged since sr1, as registered) |
+  | `tools/accuracy/ref/deviation_set.py` | a0879aa41c5d5fbabfd52aa09789920f6969d84aabc87321de2dafe8cd247299 (as registered) |
+
+- **Runners as they run, with this addendum's edit:** that edit removes only the `pending` refusal; seeds, hashes and gates are unchanged.
+
+  | File | sha256 |
+  |---|---|
+  | `tools/accuracy/run_short_runs.py` | b67eb565e400bd77eff7a6062126e74c0d36a5b752d8c01c1766d7f2eaf8b332 |
+  | `tools/accuracy/run_deviations.py` | a27ce98d9994edd060f6b8243bb216a9f83362905e8ba8f9108666aeccb9d61a |
+
+- **Runs:** once each, from `main` after this addendum merges, results reported as measured:
+  - `python3 -I tools/accuracy/run_short_runs.py --sealed p3gate --cli /home/claude/frozen/intono-cli-fc29130`
+  - `python3 -I tools/accuracy/run_deviations.py --sealed p3dev --cli /home/claude/frozen/intono-cli-fc29130`

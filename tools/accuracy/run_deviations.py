@@ -15,10 +15,9 @@ import synth
 
 # Sealed deviation sets: seeds and sha256 of "seed,seed,..." fixed before the set is run; a set runs once and is never reused.
 SEALED = {
-    # docs/adr/sealed-p3gate-preregistration.md, section "p3dev". Registered 2026-11-27 before any implementation; refused until the
-    # frozen-binary addendum is written (the engine and the CLI take an expected sequence since the ADR 0014 implementation).
-    "p3dev": dict(seeds=list(range(34301, 34317)), sha="6c44e218bb711a378ec6c0faf9d89ee4b3c8e5966f80fb370a8762b6ebbde295", spent=None,
-                  pending="the frozen-binary addendum to docs/adr/sealed-p3gate-preregistration.md is not written yet"),
+    # docs/adr/sealed-p3gate-preregistration.md, section "p3dev". Registered 2026-11-27 before any implementation; refused
+    # until the frozen-binary addendum (written 2026-11-27, before the run).
+    "p3dev": dict(seeds=list(range(34301, 34317)), sha="6c44e218bb711a378ec6c0faf9d89ee4b3c8e5966f80fb370a8762b6ebbde295", spent=None),
 }
 DEV = range(9521, 9537)
 GATES = {"invented_rate": ("<=", 0.005), "recall": (">=", 0.98)}
