@@ -1,8 +1,8 @@
 # ADR 0014: Score-informed segmentation in scale mode (the hard Phase 3 gate)
 
-Status: **Proposed** (2026-11-27). The gate's sealed set is pre-registered in `docs/adr/sealed-p3gate-preregistration.md` before any of
-this exists. DSP change (in response to the recorded known limit, ADR 0004) and C API change: needs Kelechi's "merge" before
-implementation starts, and again for the implementation PR.
+Status: **Accepted** (Kelechi, 2026-11-27; answers below). Both sealed sets (p3gate: recall; p3dev: invented notes) are pre-registered
+in `docs/adr/sealed-p3gate-preregistration.md` before any of this exists. DSP change (in response to the recorded known limit, ADR 0004)
+and C API change: the implementation PR needs Kelechi's "merge".
 
 ## Context
 
@@ -25,11 +25,15 @@ intono_set_expected(e, midi[], n) ─► expected[] + cursor k ─► note HMM: 
    `void intono_set_expected(intono_engine* e, const int* midi_notes, int n);` UI thread only. Copies up to 128 MIDI numbers into
    preallocated storage; `n = 0` returns to free mode. Handed to the worker lock-free (double buffer and an atomic generation; the worker
    picks it up between records). Nothing allocates, nothing locks, nothing new on the audio thread.
-2. **Cursor:** the worker keeps `k`, the index of the expected note being played. When a note is emitted with `midi == expected[k]`, `k`
-   advances; with `midi == expected[k+1]` (one note missed), `k` advances by two; anything else (a wrong or extra note) leaves `k`. At most
-   one skip, so a run of wrong notes cannot drag the cursor away.
-3. **The only change to decoding:** the cost of switching from the state of `expected[k]` into the state of `expected[k+1]` is
-   `kHmmSwitchExpected` instead of `kHmmSwitch` (24). Emission, tolerance, sigma, the fixed lag, the change-point fit and the glitch rule
+2. **Cursor, with a fallback** (Kelechi, 2026-11-27). The worker keeps `k`, the index of the expected note due next. When a note is
+   emitted with `midi == expected[k]`, `k` advances by one; with `midi == expected[k+1]` (**at most one** missed note), by two. Any
+   other note is a miss of the window. **After 3 consecutive notes that miss the window, the score bias is dropped** (plain, free-mode
+   decoding) **until 2 consecutive notes match consecutive expected positions again** (`expected[p]`, `expected[p+1]` for some `p >= k`);
+   then `k = p + 2` and the bias returns. So a player who loses their place, or plays something else, gets plain segmentation, never a
+   score pulling the decoder towards notes they are not playing. Unit tests: every transition of that state machine (match, one skip,
+   two skips, three misses, the re-sync, a re-sync attempt that matches only once).
+3. **The only change to decoding:** while the bias is on, the cost of switching from the state of `expected[k-1]` (the note being
+   played) into the state of `expected[k]` (the note due) is `kHmmSwitchExpected` instead of `kHmmSwitch` (24). Emission, tolerance, sigma, the fixed lag, the change-point fit and the glitch rule
    are unchanged. **One new parameter**, chosen on dev seeds 9501 to 9516 only, never on the sealed set.
 4. **Free mode is unchanged byte for byte:** with no expected sequence the decoder runs exactly as today (`bit-identity-vs-phase1`, the
    golden manifest, G7).
@@ -37,16 +41,13 @@ intono_set_expected(e, midi[], n) ─► expected[] + cursor k ─► note HMM: 
 6. **CLI:** `intono-cli file.wav --notes 1 --expected 62,64,66,...` for the runner. The runner's scale mode passes each phrase's truth
    sequence, and the p3gate set is run once as registered.
 
-## Risks and the checks for them (dev seeds, before the sealed run)
+## Risks and the checks for them
 
-- **Hallucinating the expected note** when the player plays something else or stays on a note: a lower switch cost must not invent the
-  next scale note. Dev check: phrases where 10 % of notes deviate from the expected sequence (a semitone off, a repeated note, a skipped
-  note). The expected note must not be reported where it was not played more often than free mode reports extra notes on the same
-  phrases. Question 1 asks whether this becomes a sealed gate too.
-- **Losing the cursor:** after a missed note, a wrong note or an octave error, the cursor must recover. Unit tests: every skip pattern,
-  repeated notes, an empty expected sequence, n = 128, a new sequence set mid-run.
-- **Real-time safety:** `test_rt_safety` with an expected sequence set; TSan for the handoff; the worst hop unchanged (the HMM runs on the
-  worker, not the audio thread).
+- **Inventing the expected note** when the player plays something else: now a **sealed gate** (p3dev, below), as hard as the recall
+  gate. Dev seeds 9521 to 9536 first.
+- **Losing the place:** the fallback above, with its unit tests.
+- **Real-time safety:** `test_rt_safety` with an expected sequence set; TSan for the handoff; the worst hop unchanged (the HMM runs on
+  the worker, not the audio thread).
 
 ## What changes with the API (all in the implementation PR)
 
@@ -54,15 +55,20 @@ intono_set_expected(e, midi[], n) ─► expected[] + cursor k ─► note HMM: 
 `dsp.yml`, the shim's `exports.map` and the APK check in `flutter-app.yml`, the iOS link table and the XCTest list), the C API section of
 `docs/architecture.md`, and `golden.py` (unchanged output in free mode is the check).
 
-## Gate (pre-registered)
+## Gates (pre-registered, `docs/adr/sealed-p3gate-preregistration.md`)
 
-`docs/adr/sealed-p3gate-preregistration.md`: seeds 34201 to 34216, recall >= 0.995 on notes of 100 to 250 ms with a smaller adjacent
-centre step of 100 to 150 cents in scale mode, with the sr1 gates as non-regression in the same run.
+| Set | Gate |
+|---|---|
+| **p3gate** (seeds 34201 to 34216) | recall >= 0.995 on notes of 100 to 250 ms with a smaller adjacent centre step of 100 to 150 cents, scale mode; the sr1 gates as non-regression |
+| **p3dev** (seeds 34301 to 34316, 1024 deviations) | invented-expected-note rate **<= 0.5 %**; recall of the played deviation notes **>= 0.98** |
+| free mode | byte-identical to today (bit-identity job, golden manifest) |
 
-## Questions for Kelechi
+Parameters are chosen on dev seeds only: 9501 to 9516 (short runs) and 9521 to 9536 (deviations).
 
-1. **Hallucination as a sealed gate too?** The p3gate set plays exactly the expected notes, so it cannot show a false expected note.
-   Proposal: a second registered set with 10 % deviations, gate "expected-note false positives <= free-mode extra notes", registered
-   before the sealed run. Or keep it a dev check only.
-2. **One skip in the cursor** (missed note) is enough for scales; more (e.g. two missed notes in a row) risks locking onto the wrong place
-   in a scale that repeats pitch classes. Keep one?
+## Answers (Kelechi, 2026-11-27)
+
+1. **Invented expected notes get their own sealed gate:** a pre-registered set with about 10 % deviations (wrong, skipped, repeated,
+   off-scale notes); invented-expected-note rate <= 0.5 % of deviation notes and recall of the played deviation notes >= 0.98. A false
+   note is worse than a missed one, so this gate is as hard as the recall gate.
+2. **Skip at most one missed note, plus the fallback:** after 3 consecutive notes outside the expected window, plain segmentation until
+   2 consecutive notes match an expected position again. The fallback is tested.

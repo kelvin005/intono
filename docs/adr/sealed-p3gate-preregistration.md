@@ -59,3 +59,29 @@ revisited after ADR 0007.
 Registration hashes: `run_short_runs.py` b72e888b1d42d23e3b40f16dbd3bef74ca25b1b7da2f4af8a3ca277cd047925f (refuses p3gate),
 `notes_hmm.hpp` c204b0f47b0faaefeffa89e854219eb1f18cbb572d6cb69a54923b7a964fd018, `intono.h`
 626ebe7f613744e43bb78619381d4ebe96badb78febe964ff7a7452f069017d1.
+
+## Second set: "p3dev", invented expected notes (Kelechi, 2026-11-27; registered before any implementation)
+
+A false note is worse than a missed one, so this gate is as hard as the recall gate. The p3gate set plays exactly the expected notes, so
+it cannot show the engine inventing one; this set does.
+
+- Seeds: **34301 to 34316** (16 seeds x 64 phrases = **1024 deviations**, 256 of each kind). Never used. sha256 of
+  "34301,34302,...,34316": **6c44e218bb711a378ec6c0faf9d89ee4b3c8e5966f80fb370a8762b6ebbde295**
+- Generator and scoring: `tools/accuracy/ref/deviation_set.py`, sha256 **a0879aa41c5d5fbabfd52aa09789920f6969d84aabc87321de2dafe8cd247299**
+  (calls `synth.make_phrase`; `synth.py` unchanged, 162a48ef...62fa). Each phrase: a 10-note diatonic fragment (up, then down once),
+  the expected sequence E given to the engine, played with exactly one deviation at a position 2 to 7: **wrong** (1 or 2 semitones off
+  E[p]), **skip** (E[p] not played; never at the top of a turn), **repeat** (E[p] twice, re-bowed with a 30 to 70 ms gap), **off-scale**
+  (a pitch not in E inserted before E[p]). Notes 120 to 400 ms, detune +-20 cents, half with vibrato, SNR 20 to 35 dB.
+- Scoring (in the same file): **invented** = the engine reports the invented MIDI number starting inside the event's window (wrong:
+  E[p] within +-80 ms of the wrong note's onset; skip: E[p] between the onset of the note before the gap + 80 ms and the onset of the
+  note after it + 80 ms; repeat: E[p+1] within +-80 ms of the repeat's onset; off-scale: E[p] within +-80 ms of the inserted note's
+  onset). **Recall** = the played deviation notes (wrong, repeat, off-scale; 768) found with the same MIDI number and an onset within
+  80 ms.
+- **Gates (Kelechi): invented-expected-note rate <= 0.5 % of deviations** (at most 5 of 1024); **recall of the played deviation notes
+  >= 0.98**.
+- Runner: `tools/accuracy/run_deviations.py` (sha256 a3644aca7e999124d6556550d7e309ed087a69bd7d48067a0d819f31940c7cdb at registration),
+  registry `SEALED["p3dev"]`, refused until `intono-cli --expected` exists. Dev seeds **9521 to 9536** (unused); checked here on 9521 to
+  9523 only (generator invariants, no engine): 48 deviations of each kind; a perfect engine scores 0 invented and recall 1.0, one that
+  reports the expected note at every deviation scores 16 of 16 invented.
+- Same protocol as p3gate: the addendum before the run records the frozen binary and the final runner hash; one run; reported as
+  measured; a failed set is never reused.
