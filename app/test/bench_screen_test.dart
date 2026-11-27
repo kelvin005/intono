@@ -55,7 +55,7 @@ void main() {
     await tester.pump();
     final text = tester.widget<Text>(find.byKey(const Key('bench-report'))).data!;
     expect(text, contains('guard ON'));
-    expect(text, contains('comparison build (guard OFF): not in this APK'));
+    expect(text, contains('comparison build (guard OFF): not in this build (bench APK on Android only)'));
     expect(text, contains('capture: could not start: no microphone permission'));
   });
 

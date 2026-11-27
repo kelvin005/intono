@@ -90,7 +90,7 @@ class _BenchScreenState extends State<BenchScreen> with TickerProviderStateMixin
     final product = await widget.runner.run(BenchLibrary.product, widget.runs);
     b.writeln(product ?? 'product build: bench not available');
     final noGuard = await widget.runner.run(BenchLibrary.noGuard, widget.runs);
-    b.writeln(noGuard ?? 'comparison build (guard OFF): not in this APK');
+    b.writeln(noGuard ?? 'comparison build (guard OFF): not in this build (bench APK on Android only)');
     if (await widget.audio.start()) {
       await Future<void>.delayed(Duration(seconds: widget.captureSeconds));
       b.writeln('capture ${widget.captureSeconds} s:');
