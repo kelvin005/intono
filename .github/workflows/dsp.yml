@@ -1,29 +1,46 @@
 name: dsp
+# CI cost and speed (2026-11-27): pushes run CI only on main, pull requests run it once (no duplicate push + PR runs of the same commit);
+# a newer push to a PR cancels its running jobs (main is never cancelled, so every main commit gets a result); every job has a timeout;
+# apt goes through .github/scripts/apt-install.sh (drops the unused packages.microsoft.com source, which returned 403, and retries).
 on:
   workflow_dispatch:   # manual runs (no path filter)
+  schedule:
+    - cron: "17 3 * * 1"   # weekly: golden-provenance re-checks the stored phase1-complete outputs against a fresh build of the tag
   push:
+    branches: [main]
     paths: ["dsp/**", "tools/accuracy/**", ".github/workflows/dsp.yml"]
   pull_request:
     paths: ["dsp/**", "tools/accuracy/**", ".github/workflows/dsp.yml"]
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PY_PINS: numpy==2.5.3 scipy==1.18.1 soundfile==0.14.0   # the versions tools/accuracy/golden/phase1-complete.json was made with
+
 jobs:
   test:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     strategy:
       matrix:
         sanitizer: [none, address, thread]
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y ninja-build cmake
+      - run: .github/scripts/apt-install.sh ninja-build cmake
       - run: cmake -S dsp -B build -G Ninja -DINTONO_SANITIZE=${{ matrix.sanitizer }}
       - run: cmake --build build
       - run: ctest --test-dir build --output-on-failure   # includes the real-time safety test when sanitizer=none
 
   accuracy-gate:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y ninja-build cmake libsndfile1
+      - run: .github/scripts/apt-install.sh ninja-build cmake libsndfile1
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
       - run: pip install numpy scipy librosa mir_eval soundfile
@@ -36,7 +53,9 @@ jobs:
   # Real arm64 silicon (Apple M-series): runs the whole unit-test suite with the NEON pffft path and the ARM memory
   # model. The real-time safety test is Linux-only (link-time malloc wrapping) and is skipped by CMake here.
   test-macos-arm64:
+    if: github.event_name != 'schedule'
     runs-on: macos-15   # pinned Apple Silicon label, never macos-latest: upgrades are deliberate (macos-14 is not available to this account)
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - run: brew install ninja
@@ -48,13 +67,15 @@ jobs:
   # Checks that matter for Flutter's FFI: only the 8 intono_* functions are exported, nothing needs
   # libc++_shared.so, and every LOAD segment is 16 KB aligned (Google Play requirement for Android 15+).
   android:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     strategy:
       matrix:
         abi: [arm64-v8a, armeabi-v7a, x86_64]
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - run: .github/scripts/apt-install.sh ninja-build
       - name: Locate the NDK
         run: |
           NDK="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
@@ -80,7 +101,7 @@ jobs:
             intono_read_frames intono_read_notes intono_set_tonic | sort > expected.txt
           diff expected.txt exported.txt
           # The standalone libintono.so keeps the static STL. The app's libintono_android.so uses the shared STL because Oboe's Prefab
-          # package requires it (ADR 0009 Amendment 1); that is checked in android-app.yml, which requires libc++_shared.so there.
+          # package requires it (ADR 0009 Amendment 1); that is checked in the app's workflow, which requires libc++_shared.so there.
           if "$BIN/llvm-readelf" -d "$SO" | grep -q 'libc++_shared'; then echo "standalone libintono.so links libc++_shared.so"; exit 1; fi
           "$BIN/llvm-readelf" -lW "$SO" | awk '$1=="LOAD"{print $NF}' | while read a; do
             [ $((a)) -ge 16384 ] || { echo "LOAD segment aligned to $a, need 0x4000"; exit 1; }
@@ -93,6 +114,7 @@ jobs:
   # runner image, no third-party action. The real-time safety binary is not built for Android (it wraps glibc symbols). The suite runs
   # twice, as on the host: inline, and through the note worker thread (INTONO_TEST_THREADED=1, ADR 0008). arm64 is not executed here.
   android-test:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -104,7 +126,7 @@ jobs:
           df -h / | tail -1
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/.ghcup /usr/share/swift
           df -h / | tail -1
-      - run: sudo apt-get update && sudo apt-get install -y ninja-build libpulse0 libnss3 libxcb-cursor0   # libpulse0: the emulator's qemu links it even headless
+      - run: .github/scripts/apt-install.sh ninja-build libpulse0 libnss3 libxcb-cursor0   # libpulse0: the emulator's qemu links it even headless
       - name: Locate the NDK
         run: |
           NDK="${ANDROID_NDK_LATEST_HOME:-$ANDROID_NDK_HOME}"
@@ -166,7 +188,9 @@ jobs:
 
   # Static libraries for iOS device and simulator, merged with pffft and packaged as an xcframework for the Flutter plugin.
   ios:
+    if: github.event_name != 'schedule'
     runs-on: macos-15   # pinned (see test-macos-arm64)
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - run: brew install ninja
@@ -202,40 +226,76 @@ jobs:
       - uses: actions/upload-artifact@v4
         with: { name: intono-xcframework, path: build/intono.xcframework }
 
-# Still to do: run the public datasets (URMP, NSynth) in the accuracy gate, and run the unit tests on an iOS simulator.
-
-  # ADR 0009 answer 4: the INTONO_DENORMAL_GUARD option may exist only if the default build's output is bit-identical to phase1-complete.
-  # Builds the tag and this commit with the default options and compares intono-cli output byte for byte on the synthetic dev corpus
-  # (all phrase sets, each also with 3 s of digital silence appended, with and without notes), inline and through the worker thread.
+  # ADR 0009 answer 4 (mechanism per Note 4): the default build's output must be bit-identical to phase1-complete. Builds this commit
+  # with the default options and compares the SHA-256 of intono-cli's output, case by case, with tools/accuracy/golden/phase1-complete.json
+  # (all phrase sets of the synthetic dev corpus, each also with 3 s of digital silence appended, frames and notes), inline and through
+  # the worker thread. The threaded runs are sleep-bound (the CLI waits for the 2 ms worker poll after every chunk), hence --jobs 32.
   bit-identity-vs-phase1:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env: { PYTHONDONTWRITEBYTECODE: "1" }
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
-      - run: sudo apt-get update && sudo apt-get install -y ninja-build cmake libsndfile1
+      - run: .github/scripts/apt-install.sh ninja-build cmake libsndfile1
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install numpy scipy soundfile
-      - name: Build the phase1-complete tag
+      - run: pip install $PY_PINS
+      - name: Build this commit with the default options
+        run: cmake -S dsp -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DINTONO_BUILD_TESTS=OFF && cmake --build build
+      - name: Tests of the golden tool
+        run: INTONO_CLI=build/intono-cli python tools/accuracy/test_golden.py
+      - name: Inline
+        run: python tools/accuracy/golden.py check --cli build/intono-cli --golden tools/accuracy/golden/phase1-complete.json --jobs 32
+      - name: Through the worker thread
+        run: python tools/accuracy/golden.py check --cli build/intono-cli --golden tools/accuracy/golden/phase1-complete.json --threaded --jobs 32
+
+  # Provenance of the stored outputs (ADR 0009 Note 4): builds the phase1-complete tag itself and checks it against the manifest,
+  # inline and threaded. Runs weekly, on manual runs, and on any push or PR that changes the manifest, golden.py or the corpus generator.
+  golden-provenance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env: { PYTHONDONTWRITEBYTECODE: "1" }
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }   # HEAD^1..HEAD is the change under test (the PR merge commit, or the merge on main)
+      - name: Decide whether to run
+        id: need
         run: |
+          if [ "${{ github.event_name }}" = schedule ] || [ "${{ github.event_name }}" = workflow_dispatch ]; then echo run=1 >> "$GITHUB_OUTPUT"; exit 0; fi
+          git diff --name-only HEAD^1 HEAD | tee changed.txt
+          if grep -qE '^tools/accuracy/(golden/|golden\.py|ref/synth\.py)|^\.github/workflows/dsp\.yml' changed.txt; then echo run=1; else echo run=0; fi >> "$GITHUB_OUTPUT"
+      - if: steps.need.outputs.run == '1'
+        run: .github/scripts/apt-install.sh ninja-build cmake libsndfile1
+      - if: steps.need.outputs.run == '1'
+        uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - if: steps.need.outputs.run == '1'
+        run: pip install $PY_PINS
+      - name: Build the phase1-complete tag
+        if: steps.need.outputs.run == '1'
+        run: |
+          git fetch --depth=1 origin tag phase1-complete
           git rev-parse --verify phase1-complete^{commit}
           git worktree add "$RUNNER_TEMP/frozen" phase1-complete
           cmake -S "$RUNNER_TEMP/frozen/dsp" -B "$RUNNER_TEMP/frozen-build" -G Ninja -DCMAKE_BUILD_TYPE=Release -DINTONO_BUILD_TESTS=OFF
           cmake --build "$RUNNER_TEMP/frozen-build"
-      - name: Build this commit with the default options
+      - name: The tag reproduces the manifest (inline and threaded)
+        if: steps.need.outputs.run == '1'
         run: |
-          cmake -S dsp -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DINTONO_BUILD_TESTS=OFF
-          cmake --build build
-      - name: Inline
-        run: python tools/accuracy/diff_cli.py --a "$RUNNER_TEMP/frozen-build/intono-cli" --b build/intono-cli
-      - name: Through the worker thread
-        run: python tools/accuracy/diff_cli.py --a "$RUNNER_TEMP/frozen-build/intono-cli" --b build/intono-cli --a-args "--threaded 1" --b-args "--threaded 1"
+          G=tools/accuracy/golden/phase1-complete.json
+          python tools/accuracy/golden.py check --cli "$RUNNER_TEMP/frozen-build/intono-cli" --golden $G --jobs 32
+          python tools/accuracy/golden.py check --cli "$RUNNER_TEMP/frozen-build/intono-cli" --golden $G --threaded --jobs 32
 
   # The OFF build must still compile and its guard tests must pass (it ships only in the bench APK, as information).
   denormal-guard-off:
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y ninja-build cmake
+      - run: .github/scripts/apt-install.sh ninja-build cmake
       - run: cmake -S dsp -B build-off -G Ninja -DCMAKE_BUILD_TYPE=Release -DINTONO_DENORMAL_GUARD=OFF && cmake --build build-off
       - run: INTONO_EXPECT_GUARD=0 build-off/intono_tests --gtest_filter='DenormalGuard*'
+
+# Still to do: run the public datasets (URMP, NSynth) in the accuracy gate, and run the unit tests on an iOS simulator.

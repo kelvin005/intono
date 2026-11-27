@@ -1,12 +1,18 @@
 name: flutter-app
 # ADR 0009 decision 3 and 6: the Flutter app. Flutter is installed from the official archive at a pinned version whose SHA-256 is in the
-# repository (app/.flutter-version, app/.flutter-sha256); no third-party action.
+# repository (app/.flutter-version, app/.flutter-sha256); no third-party action. Pushes run CI only on main, a newer push to a PR cancels
+# its running jobs, and apt goes through .github/scripts/apt-install.sh (see dsp.yml).
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     paths: ["app/**", "android/shim/**", "dsp/**", ".github/workflows/flutter-app.yml"]
   pull_request:
     paths: ["app/**", "android/shim/**", "dsp/**", ".github/workflows/flutter-app.yml"]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   app:
@@ -14,15 +20,31 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - run: sudo apt-get update && sudo apt-get install -y ninja-build cmake libclang-dev
+      - run: .github/scripts/apt-install.sh ninja-build cmake libclang-dev
+      # Caches (actions/cache, first-party like checkout): the Flutter archive (its SHA-256 is still verified after a restore), the pub
+      # cache, and Gradle's dependency and wrapper caches (each uncached run fetched every dependency again, and Maven Central answered
+      # 429 Too Many Requests). Keys change with the pins, so a pin change starts a fresh cache.
+      - uses: actions/cache@v4
+        with:
+          path: ~/flutter-archive
+          key: flutter-archive-${{ hashFiles('app/.flutter-version', 'app/.flutter-sha256') }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('app/pubspec.lock', 'app/android/**/*.gradle*', 'app/android/gradle/wrapper/gradle-wrapper.properties', 'app/.flutter-version') }}
+          restore-keys: deps-${{ runner.os }}-${{ github.job }}-
       - name: Install the pinned Flutter (checksum verified)
         run: |
           V=$(cat app/.flutter-version); SUM=$(cat app/.flutter-sha256)
-          curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${V}-stable.tar.xz" -o flutter.tar.xz
-          echo "$SUM  flutter.tar.xz" | sha256sum -c -
-          tar -xf flutter.tar.xz -C "$RUNNER_TEMP"
+          A="$HOME/flutter-archive/flutter_linux_${V}-stable.tar.xz"
+          mkdir -p "$HOME/flutter-archive"
+          [ -f "$A" ] || curl -fsSL --retry 3 "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${V}-stable.tar.xz" -o "$A"
+          echo "$SUM  $A" | sha256sum -c -
+          tar -xf "$A" -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
-          rm flutter.tar.xz
       - name: Analytics off
         run: |
           flutter config --no-analytics --no-cli-animations
@@ -124,7 +146,7 @@ jobs:
   # Runs the instrumented smoke test of the Flutter host app (the harness app that used to carry it is retired, ADR 0009 Note 3).
   android-emulator:
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Free disk space (the emulator image needs it; the Android SDK is kept)
@@ -132,15 +154,31 @@ jobs:
           df -h / | tail -1
           sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /opt/hostedtoolcache/CodeQL /usr/local/.ghcup /usr/share/swift
           df -h / | tail -1
-      - run: sudo apt-get update && sudo apt-get install -y ninja-build cmake libclang-dev libpulse0 libnss3 libxcb-cursor0
+      - run: .github/scripts/apt-install.sh ninja-build cmake libclang-dev libpulse0 libnss3 libxcb-cursor0
+      # Caches (actions/cache, first-party like checkout): the Flutter archive (its SHA-256 is still verified after a restore), the pub
+      # cache, and Gradle's dependency and wrapper caches (each uncached run fetched every dependency again, and Maven Central answered
+      # 429 Too Many Requests). Keys change with the pins, so a pin change starts a fresh cache.
+      - uses: actions/cache@v4
+        with:
+          path: ~/flutter-archive
+          key: flutter-archive-${{ hashFiles('app/.flutter-version', 'app/.flutter-sha256') }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.pub-cache
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: deps-${{ runner.os }}-${{ github.job }}-${{ hashFiles('app/pubspec.lock', 'app/android/**/*.gradle*', 'app/android/gradle/wrapper/gradle-wrapper.properties', 'app/.flutter-version') }}
+          restore-keys: deps-${{ runner.os }}-${{ github.job }}-
       - name: Install the pinned Flutter (checksum verified)
         run: |
           V=$(cat app/.flutter-version); SUM=$(cat app/.flutter-sha256)
-          curl -fsSL "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${V}-stable.tar.xz" -o flutter.tar.xz
-          echo "$SUM  flutter.tar.xz" | sha256sum -c -
-          tar -xf flutter.tar.xz -C "$RUNNER_TEMP"
+          A="$HOME/flutter-archive/flutter_linux_${V}-stable.tar.xz"
+          mkdir -p "$HOME/flutter-archive"
+          [ -f "$A" ] || curl -fsSL --retry 3 "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${V}-stable.tar.xz" -o "$A"
+          echo "$SUM  $A" | sha256sum -c -
+          tar -xf "$A" -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
-          rm flutter.tar.xz
       - name: Toolchain (pinned) and emulator image
         run: |
           echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
