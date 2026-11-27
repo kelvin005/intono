@@ -16,6 +16,11 @@ SEALED = {
                 min_step=150.0, gated=True),   # reports/phase1/sealed_short_run_1.md
     # informational only (no gate): centre steps down to 100 cents, same generator; reports/phase1/sealed_short_run_1.md, addendum
     "sr1info": dict(seeds=list(range(34101, 34109)), sha="d0301ff2a0ae94da89ac43656cba03403fbbc7662ae8b6d05aeb7b9141e6e8b1", spent=None, min_step=100.0, gated=False),
+    # The hard Phase 3 gate (ADR 0014, docs/adr/sealed-p3gate-preregistration.md): score-informed segmentation in scale mode, recall >= 0.995
+    # on notes of 100-250 ms with a smaller adjacent centre step of 100-150 cents. Registered 2026-11-27 before any implementation; refused
+    # until the scale-mode runner lands with the ADR 0014 implementation (the registered gates and seeds do not change then).
+    "p3gate": dict(seeds=list(range(34201, 34217)), sha="10453f5292fda9f51b8bca8014963260fde9c64fe7712e1cc43a7b0f1269a1aa", spent=None,
+                   min_step=100.0, gated=True, pending="the scale-mode runner (ADR 0014 implementation) is not written yet"),
 }
 GATES = {"recall_ge150": (">=", 0.995), "recall_100_150": (">=", 0.98), "extra_per_200": ("<=", 1.0)}
 LOG = Path(__file__).parent / "reports/phase1/short_run_runs.log"
@@ -84,6 +89,8 @@ def main():
         cfg = SEALED[a.sealed]
         if not a.cli:
             sys.exit("a sealed run needs --cli (the frozen binary)")
+        if cfg.get("pending"):
+            sys.exit(f"sealed set '{a.sealed}' is registered but cannot run yet: {cfg['pending']}")
         if cfg["spent"]:
             sys.exit(f"sealed set '{a.sealed}' is spent ({cfg['spent']})")
         if hashlib.sha256(",".join(map(str, cfg["seeds"])).encode()).hexdigest() != cfg["sha"]:
