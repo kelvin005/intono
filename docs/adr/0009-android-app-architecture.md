@@ -121,6 +121,26 @@ Carries out Note 1. The Flutter app has parity with the harness (start/stop capt
 - **CI:** `android-app.yml` became `android-shim.yml` (host tests of the shim: AudioPump, bench core, comparison library; plain, ASan, TSan). The Gradle build, the Kotlin unit tests, the APK checks and the emulator smoke test run in `flutter-app.yml` (`app` and `android-emulator` jobs). The emulator job frees runner disk first, because Flutter, the SDK and the system image do not fit otherwise.
 - **Deviation from Note 1 (accepted by Kelechi, 2026-11-27):** the C++ shim stays in `android/shim/` rather than moving under `app/android/`. With the Gradle project gone, `android/` holds only that portable C++ directory and no toolchain; its host tests (Linux, ASan, TSan) build it with plain CMake, independently of Gradle, so it is not part of the Flutter host's tree. `app/android` already references it, and moving it would change paths in two workflows, the CMake files and this ADR with no functional change. Revisit only if the iOS port needs a shared native location.
 
+## Amendment 2 (2026-11-27, Kelechi's CI cost and speed request): how answer 4's bit-identity is proven
+
+Answer 4's condition is unchanged: the default build's output must be byte-identical to `phase1-complete` on the synthetic dev corpus
+(all phrase sets of seeds 21, 77, 123, 2024; each clip as is and with 3 s of digital silence; frames and notes; inline and threaded),
+and any difference fails the PR. Only the mechanism changes, for speed: the job took 31 minutes, 30.5 of them in the threaded step,
+because the CLI waits for the worker's 2 ms poll after every 128-sample chunk (ADR 0008), so 288 runs cost about their audio's length each.
+
+- **Stored outputs, not a second build per PR.** `tools/accuracy/golden/phase1-complete.json` stores the SHA-256 of the tag's output for
+  each of the 144 cases x 2 modes, and of each case's float32 input. It was made by `tools/accuracy/golden.py make` from the tag's binary
+  (`e58070b`), which refuses to write a manifest unless the tag's inline and threaded outputs agree. `bit-identity-vs-phase1` now builds
+  only the PR head and runs `golden.py check` inline and threaded.
+- **Parallel runs.** The threaded runs are sleep-bound, so they run 32 at a time: about 45 s instead of 30.5 min (measured on a 2-core
+  machine).
+- **Provenance.** The `golden-provenance` job builds the tag itself and checks it against the manifest (inline and threaded) weekly, on
+  manual runs, and on any change to the manifest, `golden.py`, `ref/synth.py` or `dsp.yml`. The manifest is only ever made from the tag.
+- **Input drift is not a pass.** numpy, scipy and soundfile are pinned in CI to the versions recorded in the manifest. A changed input
+  hash fails the job as `INPUT DRIFT` (the comparison is invalid), separately from `DIFF` (the output changed).
+- A difference now reports which case and mode differ, not the first differing line; `diff_cli.py` against a build of the tag (unchanged,
+  kept for that) shows the line.
+
 ## Consequences
 
 - New dependencies: Oboe (Google Maven), Flutter SDK and pub packages (`ffi`, `ffigen`, plus the Flutter test SDK), Android Gradle plugin and Kotlin. All pinned, none involves user data.
