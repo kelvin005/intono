@@ -8,6 +8,9 @@ class FakeEngine implements EngineApi {
   final List<Frame> queuedFrames = [];
   final List<Note> queuedNotes = [];
   int readFramesCalls = 0;
+
+  /// Every sequence given to [setExpected], in order (ADR 0014).
+  final List<List<int>> expectedCalls = [];
   int readNotesCalls = 0;
   List<Frame> _batch = const [];
   List<Note> _noteBatch = const [];
@@ -37,6 +40,9 @@ class FakeEngine implements EngineApi {
 
   @override
   Note noteAt(int i) => _noteBatch[i];
+
+  @override
+  void setExpected(List<int> midiNotes) => expectedCalls.add(List.of(midiNotes));
 }
 
 Frame frame({double t = 0, double hz = 440, int midi = 69, double cents = 0, bool voiced = true, bool onset = false}) => Frame(

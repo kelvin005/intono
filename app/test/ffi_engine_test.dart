@@ -62,4 +62,55 @@ void main() {
     api.dispose();
     lib.intono_destroy(engine);
   });
+
+  test('setExpected reaches the real engine and a scale played as expected comes back note for note (ADR 0014)', skip: skip, () {
+    final lib = IntonoBindings(DynamicLibrary.open(path!));
+    final cfg = calloc<intono_config>();
+    cfg.ref
+      ..sample_rate = 48000
+      ..window_size = 1024
+      ..hop_size = 256
+      ..a4_hz = 440
+      ..tuning = 0
+      ..min_hz = 180
+      ..max_hz = 3200;
+    final engine = lib.intono_create(cfg);
+    calloc.free(cfg);
+    final api = FfiEngine(lib, engine);
+    const scale = [67, 69, 71, 72];
+    api.setExpected(scale);
+    const per = 12000; // 250 ms per note, then 1 s of silence closes the last one
+    const n = per * 4 + 48000;
+    final buf = calloc<Float>(n);
+    var ph = 0.0;
+    for (var i = 0; i < n; i++) {
+      final k = i ~/ per;
+      if (k < 4) {
+        final hz = 440.0 * math.pow(2, (scale[k] - 69) / 12);
+        ph += 2 * math.pi * hz / 48000.0;
+        var x = 0.0;
+        for (var h = 1; h <= 8; h++) {
+          x += 0.3 / h * math.sin(h * ph);
+        }
+        buf[i] = x;
+      }
+    }
+    for (var p = 0; p < n; p += 256) {
+      lib.intono_process(engine, buf + p, math.min(256, n - p));
+    }
+    calloc.free(buf);
+    final got = <int>[];
+    var k = api.readNotes();
+    while (k > 0) {
+      for (var i = 0; i < k; i++) {
+        got.add(api.noteAt(i).midiNote);
+      }
+      k = api.readNotes();
+    }
+    expect(got, scale);
+    api.setExpected(const []); // back to free mode
+    api.dispose();
+    api.setExpected(scale); // after dispose: a no-op, not a crash
+    lib.intono_destroy(engine);
+  });
 }

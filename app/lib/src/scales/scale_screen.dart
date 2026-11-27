@@ -101,6 +101,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
     if (!mounted) return;
     final run = ScaleRun(s, widget.config);
     _engine = widget.engineFactory(pointer);
+    _engine!.setExpected([for (final n in s.notes) n.midi]); // score-informed segmentation (ADR 0014)
     _poll = PollingController(vsync: this, engine: _engine!, onNotes: (notes) {
       run.addNotes(notes);
       if (run.complete) {
@@ -122,6 +123,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
     _poll?.dispose();
     _poll = null;
     final e = _engine;
+    e?.setExpected(const []); // free mode again before the engine is released
     if (e is Disposable) (e as Disposable).dispose();
     _engine = null;
     widget.audio.stop();

@@ -65,6 +65,22 @@ class FfiEngine implements EngineApi, Disposable {
     );
   }
 
+  /// Copies the sequence into a temporary native buffer; the engine copies it again, so the buffer is freed at once.
+  @override
+  void setExpected(List<int> midiNotes) {
+    if (_disposed) return;
+    if (midiNotes.isEmpty) {
+      _lib.intono_set_expected(_engine, nullptr, 0);
+      return;
+    }
+    final buf = calloc<Int>(midiNotes.length);
+    for (var i = 0; i < midiNotes.length; i++) {
+      buf[i] = midiNotes[i];
+    }
+    _lib.intono_set_expected(_engine, buf, midiNotes.length);
+    calloc.free(buf);
+  }
+
   @override
   void dispose() {
     if (_disposed) return;
