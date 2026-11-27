@@ -26,18 +26,9 @@ jobs:
           xcrun simctl list devicetypes | grep -i iphone | head -20
           pod --version || echo "no cocoapods"
           flutter config --list || true
-      - name: Generate app/ios
-        working-directory: app
+      - name: Generate a SwiftPM iOS plugin template (to copy its exact form)
         run: |
-          flutter create --platforms=ios --org com.example --project-name intono_app .
-          git status --porcelain
-          find ios -type f | sort
-      - name: Print app/ios (tar.gz, base64)
-        working-directory: app
-        run: |
-          tar -czf ios.tgz ios
-          shasum -a 256 ios.tgz
-          echo "=====BEGIN IOS TGZ"
-          base64 -b 0 -i ios.tgz | fold -w 4000
-          echo
-          echo "=====END IOS TGZ"
+          cd "$RUNNER_TEMP"
+          flutter create --template=plugin --platforms=ios --org com.example intono_ios
+          find intono_ios/ios -type f | sort
+          for f in $(find intono_ios/ios -type f | sort) intono_ios/pubspec.yaml intono_ios/lib/intono_ios.dart; do echo "=====FILE $f"; cat "$f"; echo "=====END"; done
