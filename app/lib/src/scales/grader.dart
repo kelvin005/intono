@@ -80,17 +80,19 @@ ScaleResult gradeScale(ScaleDef scale, List<Note> played, GradingConfig cfg) {
     }
   }
 
-  // Trace back.
+  // Trace back. On a tie, an expected note at the end is "missed" before a played note is matched to it, so the matches sit as early
+  // in the scale as possible: a partial run (a scale still being played) aligns to its first notes. Without this, the first G3 of
+  // G major tied between the opening and the closing G3 and was matched to the closing one (found with the scale screen).
   final matchOf = List<int?>.filled(n, null);
   final extra = <int>[];
   var i = n, j = m;
   while (i > 0 || j > 0) {
-    if (i > 0 && j > 0 && (cost[i][j] - (cost[i - 1][j - 1] + sub(i - 1, j - 1))).abs() < 1e-12) {
+    if (i > 0 && (cost[i][j] - (cost[i - 1][j] + 1)).abs() < 1e-12) {
+      i--;
+    } else if (i > 0 && j > 0 && (cost[i][j] - (cost[i - 1][j - 1] + sub(i - 1, j - 1))).abs() < 1e-12) {
       matchOf[i - 1] = j - 1;
       i--;
       j--;
-    } else if (i > 0 && (cost[i][j] - (cost[i - 1][j] + 1)).abs() < 1e-12) {
-      i--;
     } else {
       extra.add(j - 1);
       j--;

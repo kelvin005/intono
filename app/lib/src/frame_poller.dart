@@ -30,11 +30,15 @@ class FramePoller {
     return _state;
   }
 
+  /// Called with every batch of new notes, oldest first (the scale screen grades them; ADR 0011).
+  void Function(List<Note> notes)? onNotes;
+
   void pollNotes() {
     final n = _engine.readNotes();
     if (n > 0) {
       noteCount += n;
       lastNote = _engine.noteAt(n - 1);
+      onNotes?.call([for (var i = 0; i < n; i++) _engine.noteAt(i)]);
     }
   }
 }
@@ -46,7 +50,9 @@ class PollingController {
     required TickerProvider vsync,
     required EngineApi engine,
     this.noteInterval = const Duration(milliseconds: 100),
+    void Function(List<Note> notes)? onNotes,
   }) : _poller = FramePoller(engine) {
+    _poller.onNotes = onNotes;
     _ticker = vsync.createTicker(_onTick);
   }
 
