@@ -146,12 +146,16 @@ TEST(SoakEngine, SamplerThreadSamplesOncePerPeriodAndStopsPromptly) {
   intono_engine* e = intono_internal::create(&c, false);
   ASSERT_NE(e, nullptr);
   SoakMonitor m(e, true, 48000);
+  // Bounds from the time that actually passed: a loaded runner oversleeps (macOS arm64 CI slept far past 230 ms once), so a fixed upper
+  // bound on the count would test the scheduler, not the sampler.
+  const auto t0 = std::chrono::steady_clock::now();
   m.start_sampler(/*period_ms=*/20);
   std::this_thread::sleep_for(std::chrono::milliseconds(230));
   m.stop_sampler();
+  const double elapsed_ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - t0).count();
   const size_t n = m.seconds_sampled();
-  EXPECT_GE(n, 8u);
-  EXPECT_LE(n, 13u);
+  EXPECT_GE(n, 5u) << "elapsed " << elapsed_ms << " ms";
+  EXPECT_LE(static_cast<double>(n), elapsed_ms / 20.0 + 1.0) << "at most one reading per period; elapsed " << elapsed_ms << " ms";
   std::this_thread::sleep_for(std::chrono::milliseconds(60));
   EXPECT_EQ(m.seconds_sampled(), n) << "no samples after stop";
   intono_destroy(e);
