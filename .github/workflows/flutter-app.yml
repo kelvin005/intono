@@ -267,3 +267,13 @@ jobs:
           for sym in intono_create intono_destroy intono_drone_render intono_drone_set intono_process intono_read_frames intono_read_notes intono_set_tonic intono_bench_run; do
             grep -qx "_$sym" exported.txt || { echo "_$sym is not in the app binary"; exit 1; }
           done
+      - name: XCTest smoke tests on a booted Simulator (pinned runtime iOS 18.5, iPhone 16)
+        working-directory: app/ios
+        run: |
+          xcrun simctl list runtimes | grep -q 'iOS 18.5' || { echo "pinned Simulator runtime iOS 18.5 is not on this image"; xcrun simctl list runtimes; exit 1; }
+          xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
+            -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.5' \
+            -resultBundlePath "$RUNNER_TEMP/ios-tests.xcresult" CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | grep -E 'Test |passed|failed|error|ios session' ; test "${PIPESTATUS[0]}" -eq 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with: { name: ios-test-log, path: "${{ runner.temp }}/xcodebuild-test.log" }
