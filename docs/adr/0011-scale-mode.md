@@ -42,12 +42,16 @@ results, stored locally (input to the heatmap and spoken tips).
   semiquavers of about 120 ms as missed). 80 ms sits just above the ADR 0004 glitch rule's 12 frames (64 ms). Shorter notes are not
   graded: they are dropped before alignment, so a glitch does not shift the grades; an expected note played that short is reported as
   missed. `min_note_ms` in the config.
-- **Alignment:** edit-distance alignment of the played sequence to the expected one, substitution cost from the pitch distance, so a
-  missed note, an extra note (a repeated or slipped note, an octave error, a stray speech note) or a wrong note is one edit and later
-  grades do not shift. Same-pitch splits are merged before alignment (Kelechi, deferred from ADR 0004): consecutive notes with the same
-  MIDI number, a gap of at most `merge_gap_ms` (120) **and** mean pitches within `merge_max_cents_diff` (25) of each other. The pitch
-  condition was added with the grader: without it, a note played 60 cents sharp (an F#4 that the engine names G4 -40) merged into the
-  G4 that followed it.
+- **Alignment: semi-global edit distance** of the played sequence to the expected one. A match within 50 cents costs 0; a wrong note, a
+  missed note and an extra note cost 1 each; the **unplayed rest of the scale costs nothing**, so the same alignment works while the scale
+  is being played (the glance view) and after it (the results). Missed, extra (a repeated or slipped note, a stray speech note) and wrong
+  notes (including octave errors) are each one edit and later grades do not shift. Two details found with the scale screen: without the
+  free tail, a run in progress could jump into the descending half to "save" missed notes, and the opening tonic tied with the closing one;
+  and at the end of a run in progress, a wrong note within 3 semitones of the note due takes that note's place (red at once), while a
+  farther stray note stays an extra. Same-pitch splits are merged before alignment (Kelechi, deferred from ADR 0004): consecutive notes
+  with the same MIDI number, a gap of at most `merge_gap_ms` (120) **and** mean pitches within `merge_max_cents_diff` (25) of each other.
+  The pitch condition was added with the grader: without it, a note played 60 cents sharp (an F#4 that the engine names G4 -40) merged
+  into the G4 that followed it.
 - **Grade per expected note:** 🟢 within ±5 cents, 🟡 within ±15 cents, 🔴 beyond, or missed (counted as 🔴 in the score).
 - **Score % = (🟢 + 0.5 × 🟡) / expected notes** (Kelechi, 2026-11-27; this replaces the architecture doc's "share of notes within ±10¢").
   The 🟢 / 🟡 / 🔴 counts are shown next to the %.

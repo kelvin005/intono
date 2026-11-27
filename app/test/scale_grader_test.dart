@@ -185,4 +185,25 @@ void main() {
     expect(r.notes.length, 29);
     expect((r.green, r.yellow, r.red, r.missed), (26, 1, 1, 1));
   });
+
+  test('a partial run aligns to the start of the scale (the tonic appears twice: opening and closing)', () {
+    for (var k = 1; k < gMajor.notes.length; k++) {
+      final r = gradeScale(gMajor, play(gMajor).sublist(0, k), cfg);
+      expect([for (final g in r.notes) if (g.played != null) g.index], List.generate(k, (i) => i), reason: 'first $k notes');
+    }
+  });
+
+  test('a run in progress does not jump ahead: a far stray note is an extra, a near wrong note takes the next slot', () {
+    final base = play(gMajor).sublist(0, 2); // G3 A3
+    final far = gradeScale(gMajor, [...base, note(80, 0, 0.8)], cfg); // G#5, nowhere near B3
+    expect(far.extras.single.midiNote, 80);
+    expect([for (final g in far.notes) if (g.played != null) g.index], [0, 1]);
+    final farThenB = gradeScale(gMajor, [...base, note(80, 0, 0.8), note(59, 0, 1.2)], cfg);
+    expect(farThenB.notes[2].grade, Grade.green, reason: 'B3 is the 3rd note, not the descending B3');
+    expect(farThenB.extras.single.midiNote, 80);
+    final near = gradeScale(gMajor, [...base, note(60, 0, 1.0)], cfg); // C4 where B3 is due: a slip
+    expect(near.notes[2].grade, Grade.red);
+    expect(near.notes[2].cents, closeTo(100, 1e-9));
+    expect(near.extras, isEmpty);
+  });
 }
