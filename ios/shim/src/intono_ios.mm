@@ -277,15 +277,22 @@ extern "C" int intono_ios_smoke(void) {
   return frames > 100 && voiced_a4 > frames / 2 ? 1 : 0;
 }
 
+// The C API Dart resolves with dlsym (DynamicLibrary.process()). An externally visible, `used` table, read through a volatile pointer: a
+// function-local constant table was folded away by the optimiser (the count became a constant), so nothing referenced bench.cpp's object
+// and the linker left intono_bench_run out of the app (first ios-app run).
+extern "C" __attribute__((used, visibility("default"))) void* const intono_ios_c_api_table[] = {
+    reinterpret_cast<void*>(&intono_create),       reinterpret_cast<void*>(&intono_destroy),
+    reinterpret_cast<void*>(&intono_process),      reinterpret_cast<void*>(&intono_read_frames),
+    reinterpret_cast<void*>(&intono_read_notes),   reinterpret_cast<void*>(&intono_set_tonic),
+    reinterpret_cast<void*>(&intono_drone_set),    reinterpret_cast<void*>(&intono_drone_render),
+    reinterpret_cast<void*>(&intono_bench_run),
+};
+
 extern "C" int intono_ios_link_c_api(void) {
-  static void* const table[] = {
-      reinterpret_cast<void*>(&intono_create),       reinterpret_cast<void*>(&intono_destroy),
-      reinterpret_cast<void*>(&intono_process),      reinterpret_cast<void*>(&intono_read_frames),
-      reinterpret_cast<void*>(&intono_read_notes),   reinterpret_cast<void*>(&intono_set_tonic),
-      reinterpret_cast<void*>(&intono_drone_set),    reinterpret_cast<void*>(&intono_drone_render),
-      reinterpret_cast<void*>(&intono_bench_run),
-  };
   int n = 0;
-  for (void* p : table) n += p != nullptr ? 1 : 0;
+  for (size_t i = 0; i < sizeof intono_ios_c_api_table / sizeof intono_ios_c_api_table[0]; ++i) {
+    void* volatile p = intono_ios_c_api_table[i];
+    n += p != nullptr ? 1 : 0;
+  }
   return n;
 }
