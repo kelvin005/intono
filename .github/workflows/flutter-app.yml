@@ -20,7 +20,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-      - run: .github/scripts/apt-install.sh ninja-build cmake libclang-dev
+      - run: .github/scripts/apt-install.sh ninja-build cmake libclang-dev libsqlite3-dev
       # Caches (actions/cache, first-party like checkout): the Flutter archive (its SHA-256 is still verified after a restore), the pub
       # cache, and Gradle's dependency and wrapper caches (each uncached run fetched every dependency again, and Maven Central answered
       # 429 Too Many Requests). Keys change with the pins, so a pin change starts a fresh cache.
@@ -51,17 +51,24 @@ jobs:
           dart --disable-analytics
           flutter --version
       - name: Dependencies
+        # The lockfile is enforced. If it does not match pubspec.yaml, pub resolves anyway so that the next step can print the lockfile
+        # it should be, and that step then fails: CI is never green with a stale lockfile.
         working-directory: app
         run: |
-          if [ -f pubspec.lock ]; then flutter pub get --enforce-lockfile; else flutter pub get; fi
-      - name: Regenerate the FFI bindings and require them to be up to date
+          if [ -f pubspec.lock ]; then
+            flutter pub get --enforce-lockfile || { echo "::warning::pubspec.lock does not match pubspec.yaml; resolving to print it"; flutter pub get; }
+          else
+            flutter pub get
+          fi
+      - name: Regenerate the FFI bindings and drift's code, and require them (and the lockfile) to be up to date
         working-directory: app
         run: |
           dart run ffigen --config ffigen.yaml
-          if [ -z "$(git status --porcelain -- lib/src/ffi/intono_bindings.dart pubspec.lock)" ]; then echo "bindings and lockfile are up to date"; exit 0; fi
+          dart run build_runner build   # ADR 0015: lib/src/db/practice_db.g.dart
+          GEN="lib/src/ffi/intono_bindings.dart lib/src/db/practice_db.g.dart pubspec.lock"
+          if [ -z "$(git status --porcelain -- $GEN)" ]; then echo "bindings, generated code and lockfile are up to date"; exit 0; fi
           git status --porcelain
-          echo "=====FILE app/lib/src/ffi/intono_bindings.dart"; cat lib/src/ffi/intono_bindings.dart; echo "=====END"
-          echo "=====FILE app/pubspec.lock"; cat pubspec.lock; echo "=====END"
+          for f in $GEN; do echo "=====FILE app/$f"; cat "$f"; echo "=====END"; done
           exit 1
       - name: Scale data is what the generator makes (ADR 0011)
         run: python3 -B tools/scales/gen_scales.py --check
@@ -214,7 +221,9 @@ jobs:
             sleep 5
           done
           [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ] || { echo "emulator did not boot"; cat emulator.log; exit 1; }
-          cd app/android && ./gradlew --no-daemon --stacktrace :app:connectedDebugAndroidTest
+          (cd app/android && ./gradlew --no-daemon --stacktrace :app:connectedDebugAndroidTest)
+          # ADR 0015 decision 1: the bundled SQLite opens, writes, reopens and clears the real database file on the device.
+          (cd app && flutter test integration_test/practice_db_test.dart -d emulator-5554)
           adb emu kill || true
 
   # ADR 0010: the iOS app on the Simulator only (no signing, no Apple account, no IPA). Builds IntonoNative.xcframework from this
@@ -276,6 +285,13 @@ jobs:
           xcodebuild test -workspace Runner.xcworkspace -scheme Runner \
             -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.5' \
             -resultBundlePath "$RUNNER_TEMP/ios-tests.xcresult" CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | grep -E 'Test |passed|failed|error|ios session' ; test "${PIPESTATUS[0]}" -eq 0
+      - name: The practice database on the Simulator (ADR 0015 decision 1)
+        working-directory: app
+        run: |
+          UDID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for k,v in d.items() if k.endswith("iOS-18-5") for x in v if x["name"]=="iPhone 16"))')
+          xcrun simctl boot "$UDID" 2>/dev/null || true
+          xcrun simctl bootstatus "$UDID" -b
+          flutter test integration_test/practice_db_test.dart -d "$UDID"
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: ios-test-log, path: "${{ runner.temp }}/xcodebuild-test.log" }

@@ -1,5 +1,5 @@
 name: intono_app
-description: "Intono violin intonation trainer. Phase 2 skeleton - engine bindings, vsync polling, debug screen."
+description: "Intono violin intonation trainer."
 publish_to: none
 version: 0.1.0+1
 
@@ -10,6 +10,10 @@ dependencies:
   flutter:
     sdk: flutter
   ffi: ^2.2.0
+  # the local practice database (ADR 0015): drift on SQLite, the file in Application Support (iOS) / databases (Android)
+  drift: ^2.26.0
+  path: ^1.9.0
+  path_provider: ^2.1.0
   intono_ios:   # iOS platform side (ADR 0010); ignored on Android
     path: packages/intono_ios
 
@@ -18,6 +22,11 @@ dev_dependencies:
     sdk: flutter
   flutter_lints: ^6.0.0
   ffigen: ^23.0.0
+  # ADR 0015: drift's code generator (practice_db.g.dart is checked in; CI regenerates it and fails on a difference)
+  drift_dev: ^2.26.0
+  build_runner: ^2.4.0
+  integration_test:   # the on-device database test (ADR 0015 decision 1)
+    sdk: flutter
 
 flutter:
   uses-material-design: false

@@ -55,6 +55,12 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
 
     androidTestImplementation("androidx.test:runner:1.6.2")
+    constraints {
+        // integration_test (the on-device database test, ADR 0015) brings androidx.test:runner 1.3.0 into the debug app, and Gradle's
+        // consistent resolution then pins the instrumented tests to it, below the 1.6.2 they need. A constraint adds no dependency to a
+        // build that lacks one (release has no integration_test); it only aligns the version.
+        implementation("androidx.test:runner:1.6.2")
+    }
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
 }
 

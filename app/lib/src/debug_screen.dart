@@ -18,7 +18,7 @@ typedef EngineFactory = EngineApi Function(int enginePointer);
 /// The Phase 2 screen: live meter (note, cents, needle) over the Start/Stop and drone controls and the stream facts. It also carries what
 /// the Android harness shows, so the harness can be retired (ADR 0009 Note 1).
 class DebugScreen extends StatefulWidget {
-  const DebugScreen({super.key, required this.audio, required this.engineFactory, this.onOpenBench, this.onOpenScales});
+  const DebugScreen({super.key, required this.audio, required this.engineFactory, this.onOpenBench, this.onOpenScales, this.onOpenSettings});
 
   final AudioControl audio;
   final EngineFactory engineFactory;
@@ -28,6 +28,9 @@ class DebugScreen extends StatefulWidget {
 
   /// Opens scale mode (ADR 0011); capture is stopped first, the scale screen starts its own.
   final VoidCallback? onOpenScales;
+
+  /// Opens settings (ADR 0015: Clear history); capture is stopped first.
+  final VoidCallback? onOpenSettings;
 
   @override
   State<DebugScreen> createState() => _DebugScreenState();
@@ -163,6 +166,13 @@ class _DebugScreenState extends State<DebugScreen> with TickerProviderStateMixin
     if (mounted) open();
   }
 
+  Future<void> _openSettings() async {
+    final open = widget.onOpenSettings;
+    if (open == null) return;
+    await _stop();
+    if (mounted) open();
+  }
+
   Future<void> _openScales() async {
     final open = widget.onOpenScales;
     if (open == null) return;
@@ -210,6 +220,10 @@ class _DebugScreenState extends State<DebugScreen> with TickerProviderStateMixin
                 if (widget.onOpenScales != null) ...[
                   const SizedBox(height: 12),
                   AppButton(label: 'Scales', onTap: _openScales),
+                ],
+                if (widget.onOpenSettings != null) ...[
+                  const SizedBox(height: 12),
+                  AppButton(label: 'Settings', onTap: _openSettings),
                 ],
                 if (drone.warnSpeaker) const Padding(padding: EdgeInsets.only(top: 8), child: Text(DronePolicy.speakerWarning)),
                 const SizedBox(height: 16),

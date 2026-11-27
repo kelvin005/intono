@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intono_app/src/engine_api.dart';
+import 'package:intono_app/src/scales/grader.dart';
 import 'package:intono_app/src/scales/grading_config.dart';
 import 'package:intono_app/src/scales/scale.dart';
 import 'package:intono_app/src/scales/scale_screen.dart';
@@ -37,17 +38,58 @@ Finder keyed(String prefix) =>
 void main() {
   late FakeAudio audio;
   late FakeEngine engine;
+  late List<(ScaleResult, DateTime, DateTime)> saved;
   Widget screen() => host(ScaleScreen(
         audio: audio,
         engineFactory: (_) => engine,
         library: lib,
         config: const GradingConfig(),
         onClose: () {},
+        onRunFinished: (r, s, e) async => saved.add((r, s, e)),
       ));
 
   setUp(() {
     audio = FakeAudio();
     engine = FakeEngine();
+    saved = [];
+  });
+
+  testWidgets('a finished run is handed to the store once, with its start and end times (ADR 0015)', (t) async {
+    await t.pumpWidget(screen());
+    await t.tap(find.text('G major, 1 octave'));
+    await t.pump();
+    await t.pump();
+    engine.queuedNotes.add(n(55, 1, 0));
+    engine.queuedNotes.add(n(57, 2, 0.5));
+    await t.pump(const Duration(milliseconds: 150));
+    await t.tap(find.text('Stop'));
+    await t.pump();
+    expect(saved.length, 1);
+    final (r, start, end) = saved.single;
+    expect(r.scale.id, 'g_major_1oct');
+    expect(r.notes.where((x) => x.played != null).length, 2);
+    expect(end.isBefore(start), isFalse);
+  });
+
+  testWidgets('a store failure is shown on the results and does not hide them', (t) async {
+    await t.pumpWidget(host(ScaleScreen(
+      audio: audio,
+      engineFactory: (_) => engine,
+      library: lib,
+      config: const GradingConfig(),
+      onClose: () {},
+      onRunFinished: (r, s, e) async => throw StateError('disk full'),
+    )));
+    await t.tap(find.text('G major, 1 octave'));
+    await t.pump();
+    await t.pump();
+    engine.queuedNotes.add(n(55, 1, 0));
+    await t.pump(const Duration(milliseconds: 150));
+    await t.tap(find.text('Stop'));
+    await t.pump();
+    await t.pump();
+    expect(find.text('Play again'), findsOneWidget);
+    expect(find.textContaining('could not be saved'), findsOneWidget);
   });
 
   testWidgets('the picker lists every scale', (t) async {
