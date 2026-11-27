@@ -31,11 +31,14 @@ std::vector<float> tone(double seconds, double hz) {
   return x;
 }
 
-// Feeds x in 128-sample chunks and calls sample() once per stream second (no pacing: the arithmetic, not the timing, is under test).
+// Feeds x in 128-sample chunks and calls sample() once per stream second. After every chunk it waits for the worker (drain, a no-op
+// inline), as the CLI does: an unpaced feeder outruns the worker's 2 ms poll on a fast machine and records are dropped by design (first
+// macOS arm64 run: 1000 of 3747), which is not what these tests are about. Device-paced capture is what the soak measures on the phone.
 void feed(intono_engine* e, SoakMonitor& m, const std::vector<float>& x) {
   const size_t per_s = 48000;
   for (size_t p = 0; p < x.size(); p += 128) {
     intono_process(e, x.data() + p, static_cast<int>(std::min<size_t>(128, x.size() - p)));
+    intono_internal::drain(e);
     if ((p + 128) % per_s < 128) m.sample();
   }
 }
