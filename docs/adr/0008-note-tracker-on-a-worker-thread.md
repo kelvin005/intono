@@ -124,3 +124,15 @@ Not tested here: the shared Android build (NDK, `INTONO_SHARED`); thread creatio
 - **The software denormal guard stays on every platform, even if a phone's FPU flushes denormals to zero in hardware** (portability and bit-comparable results; no MXCSR or FPCR changes by the library).
 - **Phase 2 measures the worst hop on a real ARM phone** (M5), together with the polling power cost; see `docs/phase-2-plan.md`.
 - Phase 2 now depends only on CI being green, not on the NSynth results or the real clips.
+
+## Note 1 (2026-11-27): a flaky test, fixed in the test only
+
+`Threads.AudioThreadProducesWhileUiThreadConsumes` failed once on the CI emulator (`android-test`, `main` at `a7e258b`, inline run): 1799
+of 1872 frames read. The test's producer is not paced: it pushes 10 s of audio in about 370 ms into the 1024-frame ring. When the
+consuming thread was descheduled for long enough on the 2-vCPU emulator, the ring filled and the newest frames were dropped, which is
+the designed behaviour, not a defect. A 300 ms delay before the consumer starts reproduces it deterministically (exactly 1024 read).
+
+The test now holds its producer back while more than 512 frames are unread, as a device-paced stream would be, and keeps the 300 ms
+delay as a regression check. It still checks what it is for: strictly increasing frame times and no loss while both threads run.
+Ring overflow remains covered by the worker and ring tests. **No library code changes**: `dsp/src`, `intono.h`, the gates and the
+thresholds are untouched, and the default build's output is unchanged (bit-identity job).
