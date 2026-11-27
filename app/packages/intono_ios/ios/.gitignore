@@ -1,0 +1,3 @@
+# Built by ios/shim/build_xcframework.sh before an iOS build (CI: the ios-app job); never committed.
+intono_ios/IntonoNative.xcframework/
+.build/

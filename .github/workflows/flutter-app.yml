@@ -6,9 +6,9 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["app/**", "android/shim/**", "dsp/**", ".github/workflows/flutter-app.yml"]
+    paths: ["app/**", "android/shim/**", "ios/**", "dsp/**", ".github/workflows/flutter-app.yml"]
   pull_request:
-    paths: ["app/**", "android/shim/**", "dsp/**", ".github/workflows/flutter-app.yml"]
+    paths: ["app/**", "android/shim/**", "ios/**", "dsp/**", ".github/workflows/flutter-app.yml"]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -214,3 +214,56 @@ jobs:
           [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ] || { echo "emulator did not boot"; cat emulator.log; exit 1; }
           cd app/android && ./gradlew --no-daemon --stacktrace :app:connectedDebugAndroidTest
           adb emu kill || true
+
+  # ADR 0010: the iOS app on the Simulator only (no signing, no Apple account, no IPA). Builds IntonoNative.xcframework from this
+  # repository, then the Flutter app for the arm64 Simulator, and checks the binary. Capture is not asserted here (the runner may have no
+  # audio input); real-iPhone testing is the TestFlight milestone before the iOS launch.
+  ios-app:
+    runs-on: macos-15   # pinned (ADR 0005)
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/cache@v4
+        with:
+          path: ~/flutter-archive
+          key: flutter-archive-macos-arm64-${{ hashFiles('app/.flutter-version', 'app/.flutter-sha256-macos-arm64') }}
+      - name: Install the pinned Flutter for macOS arm64 (checksum verified)
+        run: |
+          V=$(cat app/.flutter-version); SUM=$(cat app/.flutter-sha256-macos-arm64)
+          A="$HOME/flutter-archive/flutter_macos_arm64_${V}-stable.zip"
+          mkdir -p "$HOME/flutter-archive"
+          [ -f "$A" ] || curl -fsSL --retry 3 "https://storage.googleapis.com/flutter_infra_release/releases/stable/macos/flutter_macos_arm64_${V}-stable.zip" -o "$A"
+          echo "$SUM  $A" | shasum -a 256 -c -
+          unzip -q "$A" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/flutter/bin" >> "$GITHUB_PATH"
+      - name: Toolchain
+        run: |
+          brew install ninja
+          flutter config --no-analytics --no-cli-animations --enable-swift-package-manager
+          dart --disable-analytics
+          flutter --version
+          xcodebuild -version
+      - name: Shim host tests on macOS arm64 (AudioPump, bench, soak, pump_text; the portable core iOS compiles)
+        run: |
+          cmake -S android/shim -B build-shim -G Ninja -DINTONO_SANITIZE=none
+          cmake --build build-shim
+          ctest --test-dir build-shim --output-on-failure
+      - name: Build IntonoNative.xcframework (libintono + portable core + AVAudioEngine session; device and Simulator slices)
+        run: ios/shim/build_xcframework.sh app/packages/intono_ios/ios/intono_ios
+      - name: Build the app for the Simulator (debug, no codesign)
+        working-directory: app
+        run: |
+          flutter pub get --enforce-lockfile
+          flutter build ios --simulator --debug --no-codesign
+      - name: Check the app
+        run: |
+          APP=app/build/ios/iphonesimulator/Runner.app
+          ls "$APP"
+          [ "$(plutil -extract NSMicrophoneUsageDescription raw "$APP/Info.plist")" != "" ] || { echo "NSMicrophoneUsageDescription missing"; exit 1; }
+          echo "MinimumOSVersion $(plutil -extract MinimumOSVersion raw "$APP/Info.plist")"
+          BINS="$APP/Runner"; [ -f "$APP/Runner.debug.dylib" ] && BINS="$BINS $APP/Runner.debug.dylib"
+          nm -gU $BINS 2>/dev/null | grep -E ' T _intono_' | awk '{print $3}' | sort -u | tee exported.txt
+          # dart:ffi resolves these with dlsym in the process (DynamicLibrary.process(), ADR 0010)
+          for sym in intono_create intono_destroy intono_drone_render intono_drone_set intono_process intono_read_frames intono_read_notes intono_set_tonic intono_bench_run; do
+            grep -qx "_$sym" exported.txt || { echo "_$sym is not in the app binary"; exit 1; }
+          done

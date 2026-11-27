@@ -10,6 +10,8 @@ dependencies:
   flutter:
     sdk: flutter
   ffi: ^2.2.0
+  intono_ios:   # iOS platform side (ADR 0010); ignored on Android
+    path: packages/intono_ios
 
 dev_dependencies:
   flutter_test:

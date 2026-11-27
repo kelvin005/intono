@@ -8,6 +8,7 @@ import 'src/bench_screen.dart';
 import 'src/debug_screen.dart';
 import 'src/ffi/intono_bindings.dart';
 import 'src/ffi_engine.dart';
+import 'src/native_library.dart';
 
 void main() {
   runApp(const IntonoApp());
@@ -22,8 +23,9 @@ class IntonoApp extends StatefulWidget {
 
 class _IntonoAppState extends State<IntonoApp> {
   final AudioControl _audio = MethodChannelAudio();
-  // The shim library carries the whole C API (libintono linked statically, ADR 0009); the platform side owns the engine.
-  late final IntonoBindings _bindings = IntonoBindings(DynamicLibrary.open('libintono_android.so'));
+  // Android: the shim library carries the whole C API (libintono linked statically, ADR 0009). iOS: libintono and the shim are linked
+  // into the app, so the C API is in the process (ADR 0010). The platform side owns the engine either way.
+  late final IntonoBindings _bindings = IntonoBindings(nativeLibraryFor(BenchLibrary.product)!.open());
   bool _bench = false;
 
   @override

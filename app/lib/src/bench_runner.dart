@@ -3,6 +3,8 @@ import 'dart:isolate';
 
 import 'package:ffi/ffi.dart';
 
+import 'native_library.dart';
+
 enum BenchLibrary {
   /// The shim's own engine (denormal guard ON, the product build).
   product('libintono_android.so'),
@@ -25,17 +27,19 @@ class FfiBenchRunner implements BenchRunner {
 
   /// In a separate isolate: the bench takes seconds and must not block the UI isolate (nor share its thread's timing).
   @override
-  Future<String?> run(BenchLibrary lib, int runs) => Isolate.run(() => _runHere(lib.fileName, runs));
+  Future<String?> run(BenchLibrary lib, int runs) => Isolate.run(() => _runHere(lib, runs));
 }
 
 typedef _BenchNative = Int32 Function(Int32, Pointer<Utf8>, Int32);
 typedef _BenchDart = int Function(int, Pointer<Utf8>, int);
 
-String? _runHere(String fileName, int runs) {
+String? _runHere(BenchLibrary which, int runs) {
+  final where = nativeLibraryFor(which);
+  if (where == null) return null;
   final DynamicLibrary lib;
   final _BenchDart fn;
   try {
-    lib = DynamicLibrary.open(fileName);
+    lib = where.open();
     fn = lib.lookupFunction<_BenchNative, _BenchDart>('intono_bench_run');
   } on ArgumentError {
     return null;

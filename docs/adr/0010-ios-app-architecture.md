@@ -121,6 +121,24 @@ No signing identity, provisioning profile or Apple account is used in CI. No IPA
 2. **In place:** the iOS build compiles the portable core from `android/shim/src/`; nothing moves.
 3. **Apple Developer Program enrolment waits until the TestFlight milestone starts.**
 
+## Note 1 (2026-11-27, with PR i2): what Flutter 3.50.1 dictates, and how the native code gets into the app
+
+Recorded as a note (as ADR 0009 Note 1): within the ADR's intent, dictated by the pinned Flutter.
+
+- **iOS 15.0**, not 13.0: Flutter 3.50.1's iOS host and plugin template set `IPHONEOS_DEPLOYMENT_TARGET = 15.0`. `AVAudioSinkNode` and
+  `AVAudioSourceNode` (iOS 13) are available either way; the xcframework is built for 15.0 to match.
+- **Swift Package Manager, not CocoaPods:** Flutter 3.50.1 generates `app/ios` with SwiftPM plugin integration and no Podfile. The native
+  code therefore reaches the app as a **local Flutter plugin**, `app/packages/intono_ios` (iOS only, no Dart API), whose `Package.swift`
+  follows Flutter's plugin template plus a `.binaryTarget` for `IntonoNative.xcframework`. The xcframework is built from this repository
+  by `ios/shim/build_xcframework.sh` (CMake: libintono, pffft, the portable core from `android/shim/src`, the AVAudioEngine session in
+  `ios/shim/src/intono_ios.mm`), static, device and Simulator slices; it is a build output, never committed.
+- The plugin's Swift class is the method-channel glue (the counterpart of `FlutterMainActivity.kt`); `app/ios` stays as Flutter generated
+  it, plus `NSMicrophoneUsageDescription`. The plugin uses a plain `MethodChannel`, not the template's Pigeon, so no new dependency.
+- `app/ios` was generated on `macos-15` by `flutter create --platforms=ios` with the pinned Flutter (the workspace has none) and committed
+  unmodified. The macOS arm64 Flutter archive's SHA-256 is pinned in `app/.flutter-sha256-macos-arm64`.
+- For TestFlight (release builds), the C API must survive symbol stripping for `dlsym` (Strip Style "Non-Global Symbols", or exported
+  symbols); recorded for that milestone.
+
 ## Consequences
 
 - No new dependency in i2 and i3 beyond Apple's SDK and Flutter's iOS tooling; the Apple Developer Program is deferred to the TestFlight
