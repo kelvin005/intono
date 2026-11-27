@@ -43,12 +43,16 @@ results, stored locally (input to the heatmap and spoken tips).
   question below on short notes.
 - **Alignment:** edit-distance alignment of the played sequence to the expected one, substitution cost from the pitch distance, so a
   missed note, an extra note (a repeated or slipped note, an octave error, a stray speech note) or a wrong note is one edit and later
-  grades do not shift. Same-pitch splits are merged before alignment (Kelechi, deferred from ADR 0004).
+  grades do not shift. Same-pitch splits are merged before alignment (Kelechi, deferred from ADR 0004): consecutive notes with the same
+  MIDI number, a gap of at most `merge_gap_ms` (120) **and** mean pitches within `merge_max_cents_diff` (25) of each other. The pitch
+  condition was added with the grader: without it, a note played 60 cents sharp (an F#4 that the engine names G4 -40) merged into the
+  G4 that followed it.
 - **Grade per expected note:** 🟢 within ±5 cents, 🟡 within ±15 cents, 🔴 beyond, or missed (counted as 🔴 in the score).
 - **Score % = (🟢 + 0.5 × 🟡) / expected notes** (Kelechi, 2026-11-27; this replaces the architecture doc's "share of notes within ±10¢").
   The 🟢 / 🟡 / 🔴 counts are shown next to the %.
-- **Thresholds come from a config file bundled with the app** (v1, no remote-config vendor): `grade_green_cents` 5, `grade_yellow_cents`
-  15, `min_note_ms` 150, read through one interface so a different source could replace it later without touching the grader.
+- **Thresholds come from a config file bundled with the app** (v1, no remote-config vendor), `app/assets/config/grading.json`:
+  `grade_green_cents` 5, `grade_yellow_cents` 15, `min_note_ms` 150, `merge_gap_ms` 120, `merge_max_cents_diff` 25, read through one
+  interface (`GradingConfigSource`) so a different source could replace it later without touching the grader.
 - Tests first, on synthetic note sequences (missed, extra, repeated, octave error, merged, short, every grade boundary), then on the
   engine's own output for the synthetic phrase sets.
 
