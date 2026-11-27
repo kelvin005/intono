@@ -286,12 +286,27 @@ jobs:
             -destination 'platform=iOS Simulator,name=iPhone 16,OS=18.5' \
             -resultBundlePath "$RUNNER_TEMP/ios-tests.xcresult" CODE_SIGNING_ALLOWED=NO 2>&1 | tee "$RUNNER_TEMP/xcodebuild-test.log" | grep -E 'Test |passed|failed|error|ios session' ; test "${PIPESTATUS[0]}" -eq 0
       - name: The practice database on the Simulator (ADR 0015 decision 1)
+        # flutter test can hang after "Xcode build done" (install or launch on a Simulator the XCTest step left booted; seen on main
+        # d3761bc, the whole job ran into its limit). So: a freshly booted Simulator, at most 10 minutes per attempt, one retry on a new
+        # boot, and a step limit. A test that fails (rather than hangs) fails the step at once; only a hang is retried.
         working-directory: app
+        timeout-minutes: 25
         run: |
           UDID=$(xcrun simctl list devices available -j | python3 -c 'import json,sys; d=json.load(sys.stdin)["devices"]; print(next(x["udid"] for k,v in d.items() if k.endswith("iOS-18-5") for x in v if x["name"]=="iPhone 16"))')
-          xcrun simctl boot "$UDID" 2>/dev/null || true
-          xcrun simctl bootstatus "$UDID" -b
-          flutter test integration_test/practice_db_test.dart -d "$UDID"
+          fresh() { xcrun simctl shutdown "$UDID" 2>/dev/null || true; xcrun simctl boot "$UDID"; xcrun simctl bootstatus "$UDID" -b; }
+          attempt() {
+            flutter test integration_test/practice_db_test.dart -d "$UDID" & P=$!
+            for _ in $(seq 1 600); do
+              kill -0 "$P" 2>/dev/null || { wait "$P"; return $?; }
+              sleep 1
+            done
+            echo "::warning::flutter test on the Simulator did not finish in 10 minutes"
+            kill "$P" 2>/dev/null || true; pkill -f flutter_tools 2>/dev/null || true
+            return 124
+          }
+          fresh
+          set +e; attempt; rc=$?; set -e
+          if [ "$rc" = 124 ]; then echo "retrying once on a freshly booted Simulator"; fresh; attempt; else exit "$rc"; fi
       - uses: actions/upload-artifact@v4
         if: always()
         with: { name: ios-test-log, path: "${{ runner.temp }}/xcodebuild-test.log" }
