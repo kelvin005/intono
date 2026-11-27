@@ -50,7 +50,8 @@ class ScaleResult {
 double centsToExpected(Note n, int expectedMidi) => (n.midiNote - expectedMidi) * 100.0 + n.meanCents;
 
 /// Grades a played scale against its definition: merge same-pitch splits, drop notes shorter than [GradingConfig.minNoteMs], align
-/// with an edit distance (a match within 50 cents costs 0, a wrong note, a missed note and an extra note cost 1 each), then grade.
+/// with a semi-global edit distance (a match within 50 cents costs 0; a wrong note, a missed note and an extra note cost 1 each; the
+/// unplayed rest of the scale is free), then grade. Works on a finished run and on a run still being played.
 ScaleResult gradeScale(ScaleDef scale, List<Note> played, GradingConfig cfg) {
   final ordered = [...played]..sort((a, b) => a.tStart.compareTo(b.tStart));
   final merged = _mergeSplits(ordered, cfg.mergeGapMs / 1000, cfg.mergeMaxCentsDiff);
@@ -58,10 +59,15 @@ ScaleResult gradeScale(ScaleDef scale, List<Note> played, GradingConfig cfg) {
   final exp = scale.notes;
   final n = exp.length, m = notes.length;
 
-  // Edit distance with a tiny pitch-distance term so ties prefer the closer note.
+  // Substitution cost: a match within 50 cents is free; a wrong note costs 1, the same as a missed or an extra note. A tiny distance term
+  // makes ties prefer the closer note, and a wrong note within 3 semitones (a plausible slip, e.g. F for F#) costs a hair under 1 so it
+  // takes the next slot rather than counting as an extra when the two tie at the end of a run in progress; a farther stray note (or a
+  // speech blip) stays an extra there. In the middle of a run nothing changes: a wrong note (about 1) always beats extra + missed (2).
   double sub(int i, int j) {
     final d = centsToExpected(notes[j], exp[i].midi).abs();
-    return (d <= 50 ? 0.0 : 1.0) + d / 1e6;
+    if (d <= 50) return d / 1e6;
+    if (d <= 300) return 1 - 1e-3 + d / 1e6;
+    return 1 + d / 1e6;
   }
 
   final cost = List.generate(n + 1, (_) => List<double>.filled(m + 1, 0));
@@ -80,12 +86,18 @@ ScaleResult gradeScale(ScaleDef scale, List<Note> played, GradingConfig cfg) {
     }
   }
 
-  // Trace back. On a tie, an expected note at the end is "missed" before a played note is matched to it, so the matches sit as early
-  // in the scale as possible: a partial run (a scale still being played) aligns to its first notes. Without this, the first G3 of
-  // G major tied between the opening and the closing G3 and was matched to the closing one (found with the scale screen).
+  // Semi-global: the part of the scale after the last played note costs nothing (it is not played yet, or the run was stopped), so the
+  // alignment ends at the cheapest row of the last column (ties: the later row, more of the scale covered); those trailing notes are
+  // still graded missed. Without this, a run in progress could "save" missed notes by jumping into the descending half (a stray G#5
+  // after A3 became a wrong G4 and the next B3 the descending B3), and the opening G3 tied with the closing G3 (both found with the
+  // scale screen). On a tie in the trace, an expected note is missed before a played note is matched to it, so matches sit early.
+  var iEnd = 0;
+  for (var r = 0; r <= n; r++) {
+    if (cost[r][m] <= cost[iEnd][m] + 1e-12) iEnd = r;
+  }
   final matchOf = List<int?>.filled(n, null);
   final extra = <int>[];
-  var i = n, j = m;
+  var i = iEnd, j = m;
   while (i > 0 || j > 0) {
     if (i > 0 && (cost[i][j] - (cost[i - 1][j] + 1)).abs() < 1e-12) {
       i--;

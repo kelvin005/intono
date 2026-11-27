@@ -20,8 +20,8 @@ class ScaleRun {
     _graded = gradeScale(scale, _played, config);
   }
 
-  /// The grade of the most recently played note that took a place in the scale; null before the first. A stray note played as the
-  /// latest reads as a wrong note (red) until the next scale note arrives and re-grading makes it an extra.
+  /// The grade of the most recently played note that took a place in the scale; null before the first. A far stray note (an extra)
+  /// does not change it; a near wrong note (within 3 semitones of the note due) takes that note's place and shows red at once.
   Grade? get latestGrade {
     final r = _graded;
     if (r == null) return null;
