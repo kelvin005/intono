@@ -11,5 +11,9 @@
   "min_heard_fraction": 0.25,
   "bad_run_fraction": 0.5,
   "suggest_match_fraction": 0.6,
-  "suggest_min_gain": 0.3
+  "suggest_min_gain": 0.3,
+  "count_in_seconds": 3,
+  "end_after_last_note_ms": 2000,
+  "end_after_silence_ms": 10000,
+  "quiet_warn_ms": 2000
 }

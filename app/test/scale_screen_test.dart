@@ -64,6 +64,9 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
+    await t.tap(find.text('Start'));
+    await t.pump();
+    await t.pump();
     engine.queuedNotes.addAll([n(55, 1, 0), n(57, 2, 0.5), ...heardEnough(2, 8)]);
     await t.pump(const Duration(milliseconds: 150));
     await t.tap(find.text('Stop'));
@@ -92,6 +95,9 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
+    await t.tap(find.text('Start'));
+    await t.pump();
+    await t.pump();
     engine.queuedNotes.addAll(savable());
     await t.pump(const Duration(milliseconds: 150));
     await t.tap(find.text('Stop'));
@@ -114,6 +120,9 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
+    await t.tap(find.text('Start'));
+    await t.pump();
+    await t.pump();
     engine.queuedNotes.addAll(savable());
     await t.pump(const Duration(milliseconds: 150));
     await t.tap(find.text('Stop'));
@@ -134,6 +143,9 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
+    await t.tap(find.text('Start'));
+    await t.pump();
+    await t.pump();
     engine.queuedNotes.addAll(savable());
     await t.pump(const Duration(milliseconds: 150));
     await t.tap(find.text('Stop'));
@@ -150,19 +162,98 @@ void main() {
     expect(keyed('scale-tile'), findsNWidgets(lib.scales.length));
   });
 
-  testWidgets('choosing a scale starts capture; the glance view is neutral until the first note', (t) async {
+  testWidgets('choosing a scale does not start a run: the Start screen shows the scale; Start begins it, neutral until the first note', (t) async {
+    await t.pumpWidget(screen());
+    await t.tap(find.text('G major, 1 octave'));
+    await t.pump();
+    await t.pump();
+    expect(find.text('Start'), findsOneWidget);
+    expect(find.text('Stop'), findsNothing);
+    expect(find.textContaining('G3  A3  B3'), findsOneWidget);
+    expect(engine.expectedCalls, isEmpty, reason: 'nothing is graded before Start');
+    expect(audio.calls, isNot(contains('arm')), reason: 'nothing is kept before Start (ADR 0013)');
+    engine.queuedNotes.addAll(heardEnough());
+    await t.pump(const Duration(milliseconds: 250));
+    await t.tap(find.text('Start'));
+    await t.pump();
+    await t.pump();
+    expect(audio.started, isTrue);
+    expect(glance(t), ScaleColors.neutral, reason: 'notes heard before Start are not part of the run');
+    expect(find.text('Stop'), findsOneWidget);
+    expect(find.text('0 of 15 notes'), findsOneWidget);
+  });
+
+  testWidgets('Back from the Start screen closes the microphone', (t) async {
     await t.pumpWidget(screen());
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
     expect(audio.started, isTrue);
-    expect(glance(t), ScaleColors.neutral);
+    await t.tap(find.text('Back'));
+    await t.pump();
+    expect(audio.started, isFalse);
+    expect(find.text('Choose a scale'), findsOneWidget);
+  });
+
+  testWidgets('count-in: 3, 2, 1, then the run; nothing is graded or kept until it ends; Cancel returns to Start', (t) async {
+    await t.pumpWidget(host(ScaleScreen(
+      audio: audio,
+      engineFactory: (_) => engine,
+      library: lib,
+      config: const GradingConfig(countInSeconds: 3),
+      onClose: () {},
+    )));
+    await t.tap(find.text('G major, 1 octave'));
+    await t.pump();
+    await t.pump();
+    expect(find.text('Count-in: on'), findsOneWidget);
+    await t.tap(find.text('Start'));
+    await t.pump();
+    expect(t.widget<Text>(find.byKey(const Key('count-in'))).data, '3');
+    expect(engine.expectedCalls, isEmpty);
+    await t.pump(const Duration(seconds: 1));
+    expect(t.widget<Text>(find.byKey(const Key('count-in'))).data, '2');
+    await t.tap(find.text('Cancel'));
+    await t.pump();
+    expect(find.text('Start'), findsOneWidget);
+    await t.tap(find.text('Start'));
+    await t.pump();
+    await t.pump(const Duration(seconds: 1));
+    await t.pump(const Duration(seconds: 1));
+    expect(t.widget<Text>(find.byKey(const Key('count-in'))).data, '1');
+    expect(find.text('Stop'), findsNothing);
+    await t.pump(const Duration(seconds: 1));
+    await t.pump();
+    expect(find.text('Stop'), findsOneWidget);
+    expect(engine.expectedCalls.length, 1);
+  });
+
+  testWidgets('the count-in can be switched off on the Start screen', (t) async {
+    await t.pumpWidget(host(ScaleScreen(
+      audio: audio,
+      engineFactory: (_) => engine,
+      library: lib,
+      config: const GradingConfig(countInSeconds: 3),
+      onClose: () {},
+    )));
+    await t.tap(find.text('G major, 1 octave'));
+    await t.pump();
+    await t.pump();
+    await t.tap(find.text('Count-in: on'));
+    await t.pump();
+    expect(find.text('Count-in: off'), findsOneWidget);
+    await t.tap(find.text('Start'));
+    await t.pump();
+    await t.pump();
     expect(find.text('Stop'), findsOneWidget);
   });
 
   testWidgets('a run gives the engine the scale as its expected sequence, and Stop returns it to free mode (ADR 0014)', (t) async {
     await t.pumpWidget(screen());
     await t.tap(find.text('G major, 1 octave'));
+    await t.pump();
+    await t.pump();
+    await t.tap(find.text('Start'));
     await t.pump();
     await t.pump();
     expect(engine.expectedCalls, [
@@ -176,6 +267,9 @@ void main() {
   testWidgets('the whole screen takes the grade of the last note', (t) async {
     await t.pumpWidget(screen());
     await t.tap(find.text('G major, 1 octave'));
+    await t.pump();
+    await t.pump();
+    await t.tap(find.text('Start'));
     await t.pump();
     await t.pump();
     engine.queuedNotes.add(n(55, 1, 0));
@@ -194,11 +288,17 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
+    await t.tap(find.text('Start'));
+    await t.pump();
+    await t.pump();
     for (var i = 0; i < g.notes.length; i++) {
       engine.queuedNotes.add(n(g.notes[i].midi, i == 3 ? 10 : 0, i * 0.5));
     }
     await t.pump(const Duration(milliseconds: 150));
-    await t.pump();
+    expect(find.text('Stop'), findsOneWidget, reason: 'the run goes on for 2 s after the last note of the scale is graded');
+    await t.pump(const Duration(milliseconds: 1500));
+    expect(find.text('Stop'), findsOneWidget);
+    await t.pump(const Duration(milliseconds: 1000));
     await t.pump();
     expect(audio.calls, contains('freeze'), reason: 'the microphone stops feeding the engine with the run (ADR 0013: review)');
     expect(find.text('97 %'), findsOneWidget); // (14 + 0.5) / 15 = 96.7
@@ -213,6 +313,9 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
+    await t.tap(find.text('Start'));
+    await t.pump();
+    await t.pump();
     engine.queuedNotes.addAll(heardEnough());
     await t.pump(const Duration(milliseconds: 150));
     await t.tap(find.text('Stop'));
@@ -222,9 +325,12 @@ void main() {
     expect(find.text('27 %'), findsOneWidget);
   });
 
-  testWidgets('Play again starts the same scale with a fresh run', (t) async {
+  testWidgets('Play again goes to the Start screen of the same scale', (t) async {
     await t.pumpWidget(screen());
     await t.tap(find.text('G major, 1 octave'));
+    await t.pump();
+    await t.pump();
+    await t.tap(find.text('Start'));
     await t.pump();
     await t.pump();
     await t.tap(find.text('Stop'));
@@ -234,15 +340,18 @@ void main() {
     await t.pump();
     await t.pump();
     expect(audio.started, isTrue);
-    expect(glance(t), ScaleColors.neutral);
+    expect(find.text('Start'), findsOneWidget);
     expect(find.text('G major, 1 octave'), findsOneWidget);
+    await t.tap(find.text('Start'));
+    await t.pump();
+    await t.pump();
+    expect(glance(t), ScaleColors.neutral);
   });
 
   testWidgets('no microphone: says so on the picker', (t) async {
     audio.startResult = false;
     await t.pumpWidget(screen());
     await t.tap(find.text('G major, 1 octave'));
-    await t.pump();
     await t.pump();
     await t.pump();
     expect(find.textContaining('no microphone permission'), findsOneWidget);
@@ -253,6 +362,9 @@ void main() {
     Future<void> playAndStop(WidgetTester t, List<Note> notes) async {
       await t.pumpWidget(screen());
       await t.tap(find.text('G major, 1 octave'));
+      await t.pump();
+      await t.pump();
+      await t.tap(find.text('Start'));
       await t.pump();
       await t.pump();
       engine.queuedNotes.addAll([...notes, n(59, 0, 1.0), n(60, 0, 1.5)]); // four notes: enough to count as heard
@@ -292,6 +404,9 @@ void main() {
         coach: coach,
       )));
       await t.tap(find.text('G major, 1 octave'));
+      await t.pump();
+      await t.pump();
+      await t.tap(find.text('Start'));
       await t.pump();
       await t.pump();
       engine.queuedNotes.addAll(notes);
@@ -362,6 +477,9 @@ void main() {
       await t.tap(find.text('G major, 1 octave'));
       await t.pump();
       await t.pump();
+      await t.tap(find.text('Start'));
+      await t.pump();
+      await t.pump();
       engine.queuedNotes.addAll(notes);
       await t.pump(const Duration(milliseconds: 150));
       if (t.any(find.text('Stop'))) await t.tap(find.text('Stop'));
@@ -405,6 +523,117 @@ void main() {
       await playAll(t, played(g, 0));
       expect(find.textContaining('Switch?'), findsNothing);
       expect(saved.length, 1);
+    });
+  });
+
+  group('Start / Stop, live colour and "am I being heard?" (Kelechi phone test, 2026-11-28)', () {
+    Future<void> toReady(WidgetTester t) async {
+      await t.pumpWidget(screen());
+      await t.tap(find.text('G major, 1 octave'));
+      await t.pump();
+      await t.pump();
+    }
+
+    Future<void> startRun(WidgetTester t) async {
+      await toReady(t);
+      await t.tap(find.text('Start'));
+      await t.pump();
+      await t.pump();
+    }
+
+    testWidgets('live colour: during a note the glance view shows the pitch against the note due, before the note summary', (t) async {
+      await startRun(t);
+      expect(glance(t), ScaleColors.neutral);
+      engine.queuedFrames.add(frame(t: 0.1, midi: 55, cents: 3)); // G3 sounding, 3 cents sharp
+      await t.pump(const Duration(milliseconds: 50));
+      expect(glance(t), ScaleColors.green, reason: 'no note summary has arrived yet');
+      engine.queuedFrames.add(frame(t: 0.2, midi: 55, cents: 12));
+      await t.pump(const Duration(milliseconds: 50));
+      expect(glance(t), ScaleColors.yellow);
+      engine.queuedFrames.add(frame(t: 0.3, midi: 55, cents: 30));
+      await t.pump(const Duration(milliseconds: 50));
+      expect(glance(t), ScaleColors.red);
+      engine.queuedFrames.add(frame(t: 0.4, midi: 60, cents: 0)); // C4 where G3 is due: a wrong note is red at once
+      await t.pump(const Duration(milliseconds: 50));
+      expect(glance(t), ScaleColors.red);
+    });
+
+    testWidgets('the confirmed grade replaces the live colour when the note summary arrives; the next note is then compared with the next due', (t) async {
+      await startRun(t);
+      engine.queuedFrames.add(frame(t: 0.1, midi: 55, cents: 30));
+      await t.pump(const Duration(milliseconds: 50));
+      expect(glance(t), ScaleColors.red);
+      engine.queuedFrames.add(frame(t: 0.5, voiced: false));
+      engine.queuedNotes.add(n(55, 2, 0)); // the engine's verdict: 2 cents, green
+      await t.pump(const Duration(milliseconds: 150));
+      expect(glance(t), ScaleColors.green);
+      engine.queuedFrames.add(frame(t: 0.6, midi: 57, cents: 2)); // A3, the second note
+      await t.pump(const Duration(milliseconds: 50));
+      expect(glance(t), ScaleColors.green);
+      engine.queuedFrames.add(frame(t: 0.7, midi: 57, cents: -40));
+      await t.pump(const Duration(milliseconds: 50));
+      expect(glance(t), ScaleColors.red);
+    });
+
+    testWidgets('"hearing: D4" and the level bar show the note the phone hears, on the Start screen and during the run', (t) async {
+      await toReady(t);
+      expect(find.text('hearing: --'), findsOneWidget);
+      expect(t.widget<Container>(find.byKey(const Key('input-level'))).color, ScaleColors.missed);
+      engine.queuedFrames.add(frame(t: 0.1, midi: 62, cents: 4));
+      await t.pump(const Duration(milliseconds: 50));
+      expect(find.text('hearing: D4'), findsOneWidget);
+      expect(t.widget<Container>(find.byKey(const Key('input-level'))).color, ScaleColors.green);
+      await t.tap(find.text('Start'));
+      await t.pump();
+      await t.pump();
+      engine.queuedFrames.add(frame(t: 0.2, midi: 57, cents: 1));
+      await t.pump(const Duration(milliseconds: 50));
+      expect(find.text('hearing: A3'), findsOneWidget);
+    });
+
+    testWidgets("before Start, 2 s without sound shows \"It's very quiet\"; sound clears it", (t) async {
+      await toReady(t);
+      await t.pump(const Duration(milliseconds: 1500));
+      expect(find.textContaining("It's very quiet"), findsNothing);
+      await t.pump(const Duration(milliseconds: 1000));
+      expect(find.text("It's very quiet. Move the phone closer."), findsOneWidget);
+      engine.queuedFrames.add(frame(t: 3.0, midi: 55, cents: 0));
+      await t.pump(const Duration(milliseconds: 300));
+      await t.pump(const Duration(milliseconds: 300));
+      expect(find.textContaining("It's very quiet"), findsNothing);
+    });
+
+    testWidgets('a run ends 10 s after the last sound once playing has started, not before', (t) async {
+      await startRun(t);
+      engine.queuedNotes.addAll(heardEnough());
+      await t.pump(const Duration(milliseconds: 150));
+      engine.queuedFrames.add(frame(t: 2.0, voiced: false));
+      await t.pump(const Duration(seconds: 9));
+      expect(find.text('Stop'), findsOneWidget);
+      await t.pump(const Duration(milliseconds: 1500));
+      await t.pump();
+      expect(find.text('Stop'), findsNothing);
+      expect(find.text('Play again'), findsOneWidget);
+    });
+
+    testWidgets('silence before anything is played never ends the run: only Stop does', (t) async {
+      await startRun(t);
+      await t.pump(const Duration(seconds: 30));
+      expect(find.text('Stop'), findsOneWidget);
+      await t.tap(find.text('Stop'));
+      await t.pump();
+      await t.pump();
+      expect(find.textContaining("I didn't hear you play"), findsOneWidget);
+      expect(saved, isEmpty);
+    });
+
+    testWidgets('the app going to the background on the Start screen closes the microphone', (t) async {
+      await toReady(t);
+      t.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+      await t.pump();
+      expect(audio.started, isFalse);
+      expect(find.text('Choose a scale'), findsOneWidget);
+      t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
     });
   });
 }

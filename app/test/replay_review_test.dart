@@ -53,6 +53,9 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
+    await t.tap(find.text('Start'));
+    await t.pump();
+    await t.pump();
     for (var i = 0; i < played; i++) {
       engine.queuedNotes.add(n(g.notes[i].midi, 0, 2.0 + 0.5 * i));
     }
@@ -130,6 +133,10 @@ void main() {
     await t.pump();
     await t.pump();
     final i = audio.calls.indexOf('release');
+    expect(audio.calls.sublist(i), ['release', 'stop'], reason: 'the Start screen listens but keeps nothing');
+    await t.tap(find.text('Start'));
+    await t.pump();
+    await t.pump();
     expect(audio.calls.sublist(i), ['release', 'stop', 'arm']);
   });
 
@@ -149,6 +156,9 @@ void main() {
   testWidgets('the app going to the background during a run grades it and keeps nothing to replay', (t) async {
     await t.pumpWidget(screen());
     await t.tap(find.text('G major, 1 octave'));
+    await t.pump();
+    await t.pump();
+    await t.tap(find.text('Start'));
     await t.pump();
     await t.pump();
     for (var i = 0; i < 4; i++) {

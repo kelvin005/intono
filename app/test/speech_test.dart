@@ -98,6 +98,9 @@ void main() {
       await t.tap(find.text('G major, 1 octave'));
       await t.pump();
       await t.pump();
+      await t.tap(find.text('Start'));
+      await t.pump();
+      await t.pump();
       for (var i = 0; i < 8; i++) {
         engine.queuedNotes.add(n(g.notes[i].midi, 0, 2.0 + 0.5 * i)); // eight notes: a run that is saved, so the summary is spoken
       }
