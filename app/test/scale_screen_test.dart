@@ -354,10 +354,6 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
-    await t.tap(find.text('Start'));
-    await t.pump();
-    await t.pump();
-    await t.pump();
     expect(find.textContaining('no microphone permission'), findsOneWidget);
     expect(keyed('scale-tile'), findsWidgets);
   });
