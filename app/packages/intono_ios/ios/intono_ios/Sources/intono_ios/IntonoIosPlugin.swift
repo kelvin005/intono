@@ -47,6 +47,24 @@ public class IntonoIosPlugin: NSObject, FlutterPlugin {
       let midi = args["midiNote"] as? Int ?? 57
       let gain = args["gain"] as? Double ?? 0.3
       result(intono_ios_set_drone(s, on ? 1 : 0, Int32(midi), Float(gain)) == 1)
+    // Replay (ADR 0013): the audio stays in the shim's RAM ring; Swift never sees a sample.
+    case "replayArm":
+      guard let s = session else { result(false); return }
+      result(intono_ios_replay_arm(s, args["seconds"] as? Double ?? 60) == 1)
+    case "replayFreeze":
+      if let s = session { intono_ios_replay_freeze(s) }
+      result(nil)
+    case "replayPlay":
+      guard let s = session else { result(false); return }
+      result(intono_ios_replay_play(s, args["from"] as? Double ?? 0, args["to"] as? Double ?? 0) == 1)
+    case "replayStop":
+      if let s = session { intono_ios_replay_stop(s) }
+      result(nil)
+    case "replayRelease":
+      if let s = session { intono_ios_replay_release(s) }
+      result(nil)
+    case "replayPlaying":
+      if let s = session { result(intono_ios_replay_playing(s) == 1) } else { result(false) }
     case "headphones":
       result(intono_ios_headphones() == 1)
     case "info":

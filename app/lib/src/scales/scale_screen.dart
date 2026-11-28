@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/scheduler.dart';
 import 'package:flutter/widgets.dart';
 
@@ -31,7 +33,8 @@ class ScaleColors {
 enum _Phase { pick, run, results }
 
 /// Scale mode (ADR 0011 item 4): choose a scale, play it with the glance view (the whole screen the colour of the last note), then the
-/// results: the score with the 🟢/🟡/🔴 counts and every note coloured, with "Play again". Capture runs only during a run.
+/// results: the score with the 🟢/🟡/🔴 counts and every note coloured, with "Play again". The microphone feeds the engine only during a
+/// run; in review the session stays open for replay (ADR 0013): tap a note, or "Play the run".
 class ScaleScreen extends StatefulWidget {
   const ScaleScreen({
     super.key,
@@ -68,6 +71,11 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
   String _saveError = '';
   bool _starting = false;
   DateTime _runStarted = DateTime.now();
+  // Replay (ADR 0013): armed with each run; during review the session stays open (input paused) for playback.
+  bool _replayArmed = false;
+  bool _reviewOpen = false;   // the audio session is still open for the review
+  bool _playing = false;
+  Timer? _playPoll;
 
   @override
   void initState() {
@@ -78,20 +86,33 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _stopCapture();
+    _playPoll?.cancel();
+    _playPoll = null;
+    if (_reviewOpen) {
+      // the screen closes during review: release (zero) the ring, then close the session (ADR 0013)
+      _reviewOpen = false;
+      _replayArmed = false;
+      widget.audio.replayRelease().then((_) => widget.audio.stop());
+    } else {
+      _stopCapture();
+    }
     super.dispose();
   }
 
   /// Capture never continues in the background: a run that loses the foreground ends there and shows what was graded.
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (_phase == _Phase.run && (state == AppLifecycleState.paused || state == AppLifecycleState.hidden)) _finish();
+    if (state != AppLifecycleState.paused && state != AppLifecycleState.hidden) return;
+    if (_phase == _Phase.run) _finish(keepReplay: false); // ADR 0013: nothing is kept when the app leaves the foreground
+    if (_reviewOpen) _endReview();
   }
 
   Future<void> _start(ScaleDef s) async {
     if (_starting) return;
     _starting = true;
     setState(() => _error = '');
+    if (_reviewOpen) await _endReview(); // a new run releases the old one first (ADR 0013)
+    if (!mounted) return;
     final ok = await widget.audio.start();
     if (!mounted) return;
     if (!ok) {
@@ -105,6 +126,8 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
       return;
     }
     final pointer = await widget.audio.enginePointer();
+    if (!mounted) return;
+    _replayArmed = await widget.audio.replayArm(); // the last 60 s of the run, in RAM only (ADR 0013)
     if (!mounted) return;
     final run = ScaleRun(s, widget.config);
     _engine = widget.engineFactory(pointer);
@@ -128,19 +151,63 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
     });
   }
 
-  void _stopCapture() {
+  /// Ends grading. With [keepReplay] and an armed ring the session stays open for the review (input paused); otherwise the ring is
+  /// released and capture closes.
+  void _stopCapture({bool keepReplay = false}) {
     _poll?.dispose();
     _poll = null;
     final e = _engine;
     e?.setExpected(const []); // free mode again before the engine is released
     if (e is Disposable) (e as Disposable).dispose();
     _engine = null;
-    widget.audio.stop();
+    if (keepReplay && _replayArmed) {
+      widget.audio.replayFreeze();
+      _reviewOpen = true;
+    } else {
+      if (_replayArmed) widget.audio.replayRelease();
+      _replayArmed = false;
+      widget.audio.stop();
+    }
   }
 
-  void _finish() {
+  /// Ends the review: stops playback, releases (zeroes) the ring, then closes the session.
+  Future<void> _endReview() async {
+    if (!_reviewOpen) return;
+    _reviewOpen = false;
+    _replayArmed = false;
+    _playPoll?.cancel();
+    _playPoll = null;
+    _playing = false;
+    await widget.audio.replayRelease();
+    await widget.audio.stop();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _play(double from, double to) async {
+    if (!_reviewOpen) return;
+    final ok = await widget.audio.replayPlay(from, to);
+    if (!mounted || !ok) return;
+    setState(() => _playing = true);
+    _playPoll?.cancel();
+    _playPoll = Timer.periodic(const Duration(milliseconds: 250), (_) async {
+      final still = await widget.audio.replayPlaying();
+      if (!mounted || still) return;
+      _playPoll?.cancel();
+      _playPoll = null;
+      setState(() => _playing = false);
+    });
+  }
+
+  Future<void> _stopPlayback() async {
+    _playPoll?.cancel();
+    _playPoll = null;
+    await widget.audio.replayStop();
+    if (mounted) setState(() => _playing = false);
+  }
+
+  void _finish({bool keepReplay = true}) {
     if (_phase != _Phase.run) return;
-    _stopCapture();
+    _stopCapture(keepReplay: keepReplay);
     final result = _run!.result();
     setState(() {
       _result = result;
@@ -216,6 +283,14 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
     );
   }
 
+  void _playRun(ScaleResult r) {
+    final played = [for (final g in r.notes) if (g.played != null) g.played!];
+    if (played.isEmpty) return;
+    final from = played.map((p) => p.tStart).reduce((a, b) => a < b ? a : b);
+    final to = played.map((p) => p.tEnd).reduce((a, b) => a > b ? a : b);
+    _play(from - 0.2, to + 0.3);
+  }
+
   Widget _results() {
     final r = _result!;
     String cents(double? c) => c == null ? 'missed' : '${c >= 0 ? '+' : ''}${c.toStringAsFixed(0)}¢';
@@ -237,21 +312,38 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
               runSpacing: 6,
               children: [
                 for (final g in r.notes)
-                  Container(
+                  GestureDetector(
                     key: ValueKey('result-note:${g.index}'),
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                    color: ScaleColors.of(g.grade),
-                    child: Text('${g.expected.name}\n${cents(g.cents)}\n${where(g.expected)}',
-                        textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
+                    // ADR 0013: a played note replays its own slice, 50 ms either side
+                    onTap: g.played == null || !_reviewOpen ? null : () => _play(g.played!.tStart - 0.05, g.played!.tEnd + 0.05),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                      color: ScaleColors.of(g.grade),
+                      child: Text('${g.expected.name}\n${cents(g.cents)}\n${where(g.expected)}',
+                          textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
+                    ),
                   ),
               ],
             ),
             if (r.extras.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text('${r.extras.length} extra notes')),
             if (_saveError.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_saveError)),
+            if (_reviewOpen && r.notes.any((g) => g.played != null)) ...[
+              const SizedBox(height: 20),
+              const Text('Tap a note to hear it.', style: TextStyle(fontSize: 13)),
+              const SizedBox(height: 8),
+              _playing
+                  ? AppButton(label: 'Stop playback', onTap: _stopPlayback)
+                  : AppButton(label: 'Play the run', onTap: () => _playRun(r)),
+            ],
             const SizedBox(height: 20),
             AppButton(label: 'Play again', onTap: () => _start(r.scale)),
             const SizedBox(height: 12),
-            AppButton(label: 'Scales', onTap: () => setState(() => _phase = _Phase.pick)),
+            AppButton(
+                label: 'Scales',
+                onTap: () async {
+                  await _endReview();
+                  if (mounted) setState(() => _phase = _Phase.pick);
+                }),
           ]),
         ),
       ),

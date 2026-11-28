@@ -30,6 +30,26 @@ abstract class AudioControl {
 
   /// Stops capture and returns the soak report (numbers and stream facts, never audio). The engine pointer is invalid afterwards.
   Future<String> finishSoak();
+
+  // Replay (ADR 0013). The audio stays in the shim's RAM ring: it never crosses to Dart, is never written to disk and never uploaded.
+
+  /// Starts keeping the last [seconds] of input in RAM (a scale run). Releases any previous run first. False if it cannot.
+  Future<bool> replayArm({double seconds = 60});
+
+  /// The run is over: the microphone no longer reaches the engine or the ring (nothing grades the playback); the session stays open
+  /// for playback.
+  Future<void> replayFreeze();
+
+  /// Plays the kept audio from [fromS] to [toS] in the engine's time (seconds, as in a note's tStart and tEnd). False if none of it is
+  /// kept.
+  Future<bool> replayPlay(double fromS, double toS);
+
+  Future<void> replayStop();
+
+  /// Stops playback, zeroes the ring and frees it. Call before [stop] when a review ends.
+  Future<void> replayRelease();
+
+  Future<bool> replayPlaying();
 }
 
 class MethodChannelAudio implements AudioControl {
@@ -79,4 +99,22 @@ class MethodChannelAudio implements AudioControl {
 
   @override
   Future<String> finishSoak() => _call<String>('finishSoak', 'soak report unavailable');
+
+  @override
+  Future<bool> replayArm({double seconds = 60}) => _call<bool>('replayArm', false, {'seconds': seconds});
+
+  @override
+  Future<void> replayFreeze() => _call<Object?>('replayFreeze', null);
+
+  @override
+  Future<bool> replayPlay(double fromS, double toS) => _call<bool>('replayPlay', false, {'from': fromS, 'to': toS});
+
+  @override
+  Future<void> replayStop() => _call<Object?>('replayStop', null);
+
+  @override
+  Future<void> replayRelease() => _call<Object?>('replayRelease', null);
+
+  @override
+  Future<bool> replayPlaying() => _call<bool>('replayPlaying', false);
 }

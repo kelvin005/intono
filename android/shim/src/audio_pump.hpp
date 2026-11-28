@@ -5,7 +5,12 @@
 //
 // Input gaps (ADR 0009 Note 2, after the 2026-11-23 device run): a gap is a discontinuity of the stream's frame position, not a late
 // callback. Late callbacks by the wall clock are counted separately: in shared mode they are bursts, not lost audio.
-//   on_output(out, n) output callback: silence while the drone is off (the default), intono_drone_render while it is on.
+//   on_output(out, n) output callback: silence while the drone is off (the default), intono_drone_render while it is on, and a replay
+//                     slice instead of either while one plays (ADR 0013).
+//
+// Replay (ADR 0013): every input block also goes to replay() (the ring keeps it only while armed). After a scale run the UI freezes
+// the ring: from then on the microphone reaches neither the engine nor the ring (nothing grades the playback) until the ring is
+// released or armed again. The paused stretch is not an input gap: gap and late-callback tracking start afresh after it.
 //
 // Real-time rules: no allocation, no lock, no syscall in on_input / on_output (a clock read is a vDSO call). Statistics are written by
 // one thread per side with relaxed atomics and read by any thread through snapshot(). Resets are requested from any thread and applied
@@ -17,6 +22,7 @@
 #include <vector>
 
 #include "intono/intono.h"
+#include "replay_ring.hpp"
 
 namespace intono_shim {
 
@@ -118,6 +124,9 @@ class AudioPump {
   // Any thread.
   void set_drone_enabled(bool on) { drone_on_.store(on, std::memory_order_release); }
   bool drone_enabled() const { return drone_on_.load(std::memory_order_acquire); }
+  ReplayRing& replay() { return replay_; }
+  const ReplayRing& replay() const { return replay_; }
+  bool output_wanted() const { return drone_enabled() || replay_.playing(); }   // whether an output stream has anything to render
   void set_output_xruns(uint64_t n) { out_xruns_.store(n, std::memory_order_relaxed); }
   void request_reset() {
     reset_in_.store(true, std::memory_order_release);
@@ -135,6 +144,8 @@ class AudioPump {
   Clock clock_;
 
   std::atomic<bool> drone_on_{false}, reset_in_{false}, reset_out_{false};
+  ReplayRing replay_;
+  bool was_paused_ = false;   // input thread: the previous callback came while the ring was frozen
   std::atomic<uint64_t> out_xruns_{0};
 
   // input side (input thread writes)

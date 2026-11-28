@@ -38,6 +38,12 @@ class FlutterMainActivity : FlutterActivity() {
                     (call.argument<Double>("gain") ?: 0.3).toFloat(),
                 ),
             )
+            "replayArm" -> result.success(audio.replayArm(call.argument<Double>("seconds") ?: 60.0))
+            "replayFreeze" -> { audio.replayFreeze(); result.success(null) }
+            "replayPlay" -> result.success(audio.replayPlay(call.argument<Double>("from") ?: 0.0, call.argument<Double>("to") ?: 0.0))
+            "replayStop" -> { audio.replayStop(); result.success(null) }
+            "replayRelease" -> { audio.replayRelease(); result.success(null) }
+            "replayPlaying" -> result.success(audio.replayPlaying())
             "headphones" -> result.success(monitor.connected())
             "info" -> result.success(audio.info())
             "lastError" -> result.success(audio.lastError)

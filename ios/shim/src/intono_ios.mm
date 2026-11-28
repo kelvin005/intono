@@ -146,7 +146,7 @@ extern "C" intono_ios_session* intono_ios_start(int soak_minutes, int inline_eng
                                               renderBlock:^OSStatus(BOOL* silence, const AudioTimeStamp*, AVAudioFrameCount n, AudioBufferList* out) {
       if (!out || out->mNumberBuffers < 1 || !out->mBuffers[0].mData) return noErr;
       float* d = static_cast<float*>(out->mBuffers[0].mData);
-      if (!pump->drone_enabled()) {
+      if (!pump->output_wanted()) {   // neither the drone nor a replay (ADR 0013): silence
         for (UInt32 b = 0; b < out->mNumberBuffers; ++b) std::memset(out->mBuffers[b].mData, 0, out->mBuffers[b].mDataByteSize);
         *silence = YES;
         return noErr;
@@ -202,6 +202,27 @@ extern "C" int intono_ios_set_drone(intono_ios_session* s, int on, int midi_note
   s->pump->set_drone_enabled(on != 0);
   return 1;
 }
+
+// Replay (ADR 0013): the pump's RAM ring at the input rate; the source node plays it (it is rendered at the same rate). No audio
+// leaves this file: nothing here writes a file, a cache or a media item.
+extern "C" int intono_ios_replay_arm(intono_ios_session* s, double seconds) {
+  return s && s->pump && s->pump->replay().arm(static_cast<int>(std::lround(s->sample_rate)), seconds) ? 1 : 0;
+}
+extern "C" void intono_ios_replay_freeze(intono_ios_session* s) {
+  if (s && s->pump) s->pump->replay().freeze();
+}
+extern "C" int intono_ios_replay_play(intono_ios_session* s, double from_s, double to_s) {
+  if (!s || !s->pump) return 0;
+  ReplayRing& r = s->pump->replay();
+  return r.play(r.frame_of_seconds(from_s), r.frame_of_seconds(to_s)) ? 1 : 0;
+}
+extern "C" void intono_ios_replay_stop(intono_ios_session* s) {
+  if (s && s->pump) s->pump->replay().stop_playback();
+}
+extern "C" void intono_ios_replay_release(intono_ios_session* s) {
+  if (s && s->pump) s->pump->replay().release();   // zeroed before it is freed
+}
+extern "C" int intono_ios_replay_playing(const intono_ios_session* s) { return s && s->pump && s->pump->replay().playing() ? 1 : 0; }
 
 extern "C" int intono_ios_info(intono_ios_session* s, char* out, int cap) {
   if (!s) return copy_out("stopped", out, cap);

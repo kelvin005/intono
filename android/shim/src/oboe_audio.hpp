@@ -27,8 +27,18 @@ class OboeSession {
   static std::unique_ptr<OboeSession> start(std::string* error, const SessionOptions& opts = {});
   ~OboeSession();   // stops and closes the streams first, then destroys the engine
 
-  // Opens (enabled) or closes the output stream that renders the engine's drone. False if the stream cannot be opened.
+  // Opens (enabled) or closes the output stream that renders the engine's drone. False if the stream cannot be opened. The stream
+  // stays open while a replay review needs it.
   bool set_drone(bool enabled, int midi_note, float gain);
+
+  // Replay (ADR 0013), all UI thread: the pump's RAM ring at the input rate. play() opens the output stream if the drone has not;
+  // release() zeroes and frees the ring and closes the output stream unless the drone uses it. Times are the engine's (seconds).
+  bool replay_arm(double seconds);
+  void replay_freeze();
+  bool replay_play(double from_s, double to_s);
+  void replay_stop();
+  void replay_release();
+  bool replay_playing() const;
   bool healthy() const { return !input_lost_.load(std::memory_order_acquire); }   // false after a disconnect: restart the session
   intono_engine* engine() const { return engine_; }
   std::string info();   // settings and timing text, never audio
@@ -40,6 +50,9 @@ class OboeSession {
 
  private:
   OboeSession() = default;
+  bool open_output_locked();    // mu_ held: opens and starts the output stream if it is not open
+  void close_output_locked();   // mu_ held
+  bool in_review_ = false;      // mu_: the ring is frozen for a review, so the output stream may be needed
 
   struct InputCallback;
   struct OutputCallback;

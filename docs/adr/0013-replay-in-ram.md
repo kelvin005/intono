@@ -37,3 +37,45 @@ Kelechi wants replay in v1 without weakening it.
 
 - Up to about 11.5 MB of RAM during a scale run and its review; nothing outside the app process.
 - The privacy label and data-safety form stay "no data collected" (ADR 0012): audio is processed in memory, never stored or sent.
+
+## Implementation note (2026-11-28)
+
+- **Where the ring lives.** `ReplayRing` is in the portable shim (`android/shim/src/replay_ring.*`), which Android and iOS share. It is
+  owned by `AudioPump`.
+- **The time base.** Every input frame is counted from the session's first frame, which is the engine's own sample clock, so a note's
+  `t_start`–`t_end` maps exactly to its samples.
+- **Playback rate.** The output path runs at the input rate on both platforms (Oboe asks for the input rate; iOS's source node uses
+  the input format), so playback is pitch-exact with no resampling.
+- **The audio-thread handoff.** Each audio thread sets a busy flag before it loads the buffer pointer, and `release()` clears the
+  pointer and waits for both flags (seq_cst on both sides). The buffer is then zeroed through a volatile pointer, so the stores cannot
+  be optimised away, and freed. `arm()` on an armed ring releases first, and the destructor releases.
+- **In review (frozen)** the microphone reaches neither the engine nor the ring, so nothing grades the playback. Stream statistics
+  start afresh after the pause, so it is not counted as an input gap.
+  - **Android** also stops the input stream at freeze, so the system microphone indicator goes off during review.
+  - **iOS** keeps the `AVAudioEngine` input running, because input and output are one engine and stopping input alone means
+    reconfiguring it while it runs. Every sample is discarded at the pump, but the system microphone indicator stays on during review.
+    Stopping it is a possible follow-up.
+- **Lifecycle (app).** The ring is armed after capture starts and frozen when the run ends. It is released, then the session stopped,
+  when any of these happens:
+  - the user leaves the review;
+  - a new run starts ("Play again");
+  - the app goes to the background, during a run (graded, nothing kept) or during review;
+  - the screen closes.
+- **Tests.**
+  - The shim: 15 ring and pump tests, covering:
+    - keeping the last 60 s and wrapping;
+    - the frame clock;
+    - slices with fades;
+    - clamping;
+    - zero-before-free, checked by an allocator spy;
+    - re-arm;
+    - the destructor;
+    - release racing both audio threads;
+    - the pump pausing input;
+    - playback replacing the drone;
+    - **no file opened** during a whole run, review and release (Linux `/proc/self/fd`).
+  - RT-safety with the ring recording and playing.
+  - TSan and ASan clean.
+  - Dart: 12 review-screen lifecycle tests.
+  - The "no file" check runs on the shared C++ on the host. The platform glue (Kotlin, Swift) only passes calls and never sees a
+    sample.

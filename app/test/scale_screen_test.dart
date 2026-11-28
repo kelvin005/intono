@@ -149,7 +149,7 @@ void main() {
     await t.pump(const Duration(milliseconds: 150));
     await t.pump();
     await t.pump();
-    expect(audio.started, isFalse, reason: 'capture stops with the run');
+    expect(audio.calls, contains('freeze'), reason: 'the microphone stops feeding the engine with the run (ADR 0013: review)');
     expect(find.text('97 %'), findsOneWidget); // (14 + 0.5) / 15 = 96.7
     expect(find.text('🟢 14   🟡 1   🔴 0'), findsOneWidget);
     expect(keyed('result-note'), findsNWidgets(15));

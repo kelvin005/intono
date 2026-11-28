@@ -72,6 +72,20 @@ JNIEXPORT jboolean JNICALL Java_com_example_intono_NativeAudio_nativeSetDrone(JN
   return session(h)->set_drone(on == JNI_TRUE, midi, gain) ? JNI_TRUE : JNI_FALSE;
 }
 
+// Replay (ADR 0013): the audio stays in the pump's RAM ring; nothing here passes audio to Java.
+JNIEXPORT jboolean JNICALL Java_com_example_intono_NativeAudio_nativeReplayArm(JNIEnv*, jobject, jlong h, jdouble seconds) {
+  return session(h)->replay_arm(seconds) ? JNI_TRUE : JNI_FALSE;
+}
+JNIEXPORT void JNICALL Java_com_example_intono_NativeAudio_nativeReplayFreeze(JNIEnv*, jobject, jlong h) { session(h)->replay_freeze(); }
+JNIEXPORT jboolean JNICALL Java_com_example_intono_NativeAudio_nativeReplayPlay(JNIEnv*, jobject, jlong h, jdouble from, jdouble to) {
+  return session(h)->replay_play(from, to) ? JNI_TRUE : JNI_FALSE;
+}
+JNIEXPORT void JNICALL Java_com_example_intono_NativeAudio_nativeReplayStop(JNIEnv*, jobject, jlong h) { session(h)->replay_stop(); }
+JNIEXPORT void JNICALL Java_com_example_intono_NativeAudio_nativeReplayRelease(JNIEnv*, jobject, jlong h) { session(h)->replay_release(); }
+JNIEXPORT jboolean JNICALL Java_com_example_intono_NativeAudio_nativeReplayPlaying(JNIEnv*, jobject, jlong h) {
+  return session(h)->replay_playing() ? JNI_TRUE : JNI_FALSE;
+}
+
 JNIEXPORT jstring JNICALL Java_com_example_intono_NativeAudio_nativeInfo(JNIEnv* env, jobject, jlong h) {
   return env->NewStringUTF(session(h)->info().c_str());
 }

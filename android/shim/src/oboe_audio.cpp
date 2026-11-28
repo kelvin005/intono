@@ -123,43 +123,91 @@ OboeSession::~OboeSession() {
   if (engine_) intono_destroy(engine_);
 }
 
+bool OboeSession::open_output_locked() {
+  if (out_) return true;
+  out_cb_ = std::make_shared<OutputCallback>();
+  output_lost_.store(false);
+  oboe::AudioStreamBuilder b;
+  b.setDirection(oboe::Direction::Output)
+      ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
+      ->setSharingMode(oboe::SharingMode::Exclusive)
+      ->setFormat(oboe::AudioFormat::Float)
+      ->setChannelCount(oboe::ChannelCount::Mono)
+      ->setSampleRate(sample_rate_)   // the input rate: the drone and the replay need no rate conversion of their own
+      ->setSampleRateConversionQuality(oboe::SampleRateConversionQuality::Medium)
+      ->setUsage(oboe::Usage::Media)
+      ->setContentType(oboe::ContentType::Music)
+      ->setDataCallback(out_cb_)
+      ->setErrorCallback(std::make_shared<ErrorCallback>(&output_lost_));
+  const oboe::Result r = b.openStream(out_);
+  if (r != oboe::Result::OK) {
+    LOGE("cannot open the output stream: %s", oboe::convertToText(r));
+    out_.reset();
+    out_cb_.reset();
+    return false;
+  }
+  out_->setBufferSizeInFrames(2 * out_->getFramesPerBurst());
+  out_cb_->pump.store(pump_.get(), std::memory_order_release);
+  return out_->requestStart() == oboe::Result::OK;
+}
+
+void OboeSession::close_output_locked() {
+  if (out_) { out_->requestStop(); out_->close(); out_.reset(); out_cb_.reset(); }   // close() returns after the last callback
+}
+
 bool OboeSession::set_drone(bool enabled, int midi_note, float gain) {
   std::lock_guard<std::mutex> lock(mu_);
   if (!engine_) return false;
   if (!enabled) {
     pump_->set_drone_enabled(false);
-    if (out_) { out_->requestStop(); out_->close(); out_.reset(); out_cb_.reset(); }
+    if (!in_review_) close_output_locked();
     return true;
   }
   intono_drone_set(engine_, midi_note, gain, 0);
-  if (!out_) {
-    out_cb_ = std::make_shared<OutputCallback>();
-    output_lost_.store(false);
-    oboe::AudioStreamBuilder b;
-    b.setDirection(oboe::Direction::Output)
-        ->setPerformanceMode(oboe::PerformanceMode::LowLatency)
-        ->setSharingMode(oboe::SharingMode::Exclusive)
-        ->setFormat(oboe::AudioFormat::Float)
-        ->setChannelCount(oboe::ChannelCount::Mono)
-        ->setSampleRate(sample_rate_)
-        ->setSampleRateConversionQuality(oboe::SampleRateConversionQuality::Medium)
-        ->setUsage(oboe::Usage::Media)
-        ->setContentType(oboe::ContentType::Music)
-        ->setDataCallback(out_cb_)
-        ->setErrorCallback(std::make_shared<ErrorCallback>(&output_lost_));
-    const oboe::Result r = b.openStream(out_);
-    if (r != oboe::Result::OK) {
-      LOGE("cannot open the drone stream: %s", oboe::convertToText(r));
-      out_.reset();
-      out_cb_.reset();
-      return false;
-    }
-    out_->setBufferSizeInFrames(2 * out_->getFramesPerBurst());
-    out_cb_->pump.store(pump_.get(), std::memory_order_release);
-  }
+  if (!open_output_locked()) return false;
   pump_->set_drone_enabled(true);
-  return out_->requestStart() == oboe::Result::OK;
+  return true;
 }
+
+bool OboeSession::replay_arm(double seconds) {
+  std::lock_guard<std::mutex> lock(mu_);
+  if (!pump_) return false;
+  in_review_ = false;
+  return pump_->replay().arm(sample_rate_, seconds);
+}
+
+void OboeSession::replay_freeze() {
+  std::lock_guard<std::mutex> lock(mu_);
+  if (!pump_ || !pump_->replay().armed()) return;
+  pump_->replay().freeze();
+  in_review_ = true;
+  // The review needs no microphone: stop the input stream so the system's microphone indicator goes off. A review always ends by
+  // closing the session (replay_release, then stop), which closes the stream.
+  if (in_) in_->requestStop();
+}
+
+bool OboeSession::replay_play(double from_s, double to_s) {
+  std::lock_guard<std::mutex> lock(mu_);
+  if (!pump_ || !in_review_) return false;
+  if (!open_output_locked()) return false;
+  ReplayRing& r = pump_->replay();
+  return r.play(r.frame_of_seconds(from_s), r.frame_of_seconds(to_s));
+}
+
+void OboeSession::replay_stop() {
+  std::lock_guard<std::mutex> lock(mu_);
+  if (pump_) pump_->replay().stop_playback();
+}
+
+void OboeSession::replay_release() {
+  std::lock_guard<std::mutex> lock(mu_);
+  if (!pump_) return;
+  pump_->replay().release();   // zeroed before it is freed
+  in_review_ = false;
+  if (!pump_->drone_enabled()) close_output_locked();
+}
+
+bool OboeSession::replay_playing() const { return pump_ && pump_->replay().playing(); }
 
 std::string OboeSession::info() {
   std::lock_guard<std::mutex> lock(mu_);
