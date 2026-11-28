@@ -77,8 +77,8 @@ class ScaleResult {
   final List<Note> extras;
   final int green, yellow, red, missed;
 
-  /// Wrong notes (counted in [missed] too: the expected note was not played), and expected notes with something heard in their place
-  /// (played or wrong).
+  /// Wrong notes (counted in [missed] too: the expected note was not played), and how many notes were heard at all (played, wrong or
+  /// stray: after merging splits and dropping notes shorter than the minimum).
   final int wrong, heard;
 
   /// Fewer than [GradingConfig.minHeardFraction] of the expected notes were heard: nothing is graded, shown as a grade, saved or coached.
@@ -190,7 +190,8 @@ ScaleResult gradeScale(ScaleDef scale, List<Note> played, GradingConfig cfg) {
     graded.add(GradedNote(index: k, expected: exp[k], grade: g, played: notes[mj], cents: c));
   }
   final score = n == 0 ? 0.0 : 100.0 * (green + 0.5 * yellow) / n;
-  final heard = graded.where((g) => g.heard != null).length;
+  // heard: the played notes that count (merged, long enough): wrong or stray ones too, since something was played; silence is not
+  final heard = notes.length;
   final notHeard = n > 0 && heard < cfg.minHeardFraction * n;
   return ScaleResult(
     scale: scale,

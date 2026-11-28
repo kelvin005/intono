@@ -68,13 +68,15 @@ void main() {
     expect(r.extras.map((n) => n.midiNote), [73]);
   });
 
-  test('a wrong note takes its slot, graded red with its distance in cents', () {
+  test('a wrong note takes its slot, named, with no cents: the expected note is missed', () {
     final played = play(gMajor);
     played[6] = note(65, 0, 3.0); // F natural instead of F#4
     final r = gradeScale(gMajor, played, cfg);
-    expect(r.notes[6].grade, Grade.red);
-    expect(r.notes[6].cents, closeTo(-100, 1e-9));
-    expect(r.green, 14);
+    expect(r.notes[6].grade, Grade.missed);
+    expect(r.notes[6].isWrong, isTrue);
+    expect(r.notes[6].wrongName, 'F4');
+    expect(r.notes[6].cents, isNull);
+    expect((r.green, r.missed, r.wrong), (14, 1, 1));
     expect(r.extras, isEmpty);
   });
 
@@ -82,8 +84,9 @@ void main() {
     final played = play(gMajor);
     played[1] = note(69, 1, 0.5); // A4 reported for A3
     final r = gradeScale(gMajor, played, cfg);
-    expect(r.notes[1].grade, Grade.red);
-    expect(r.notes[1].cents, closeTo(1201, 1e-9));
+    expect(r.notes[1].grade, Grade.missed);
+    expect(r.notes[1].wrongName, 'A4');
+    expect(r.notes[1].cents, isNull); // never "+1201¢"
     expect(r.green, 14);
   });
 
@@ -202,8 +205,9 @@ void main() {
     expect(farThenB.notes[2].grade, Grade.green, reason: 'B3 is the 3rd note, not the descending B3');
     expect(farThenB.extras.single.midiNote, 80);
     final near = gradeScale(gMajor, [...base, note(60, 0, 1.0)], cfg); // C4 where B3 is due: a slip
-    expect(near.notes[2].grade, Grade.red);
-    expect(near.notes[2].cents, closeTo(100, 1e-9));
+    expect(near.notes[2].isWrong, isTrue);
+    expect(near.notes[2].wrongName, 'C4');
+    expect(near.notes[2].cents, isNull);
     expect(near.extras, isEmpty);
   });
 

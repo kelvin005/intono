@@ -28,8 +28,10 @@ Note n(int midi, double cents, double t0) => Note(
     meanConfidence: 0.99,
     frameCount: 75);
 
-/// Four in-tune notes: enough of the 15 expected notes (27 %) to count as heard (GradingConfig.minHeardFraction, 25 %).
-List<Note> heardEnough([int from = 0]) => [for (var i = from; i < 4; i++) n(g.notes[i].midi, 0, i * 0.5)];
+/// In-tune notes from the start of the scale. Four (27 %) are enough to count as heard (GradingConfig.minHeardFraction, 25 %); eight
+/// leave at most half missed, so the run is saved without asking (GradingConfig.badRunFraction, 50 %).
+List<Note> heardEnough([int from = 0, int to = 4]) => [for (var i = from; i < to; i++) n(g.notes[i].midi, 0, i * 0.5)];
+List<Note> savable() => heardEnough(0, 8);
 
 Widget host(Widget w) => Directionality(textDirection: TextDirection.ltr, child: w);
 
@@ -62,14 +64,14 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
-    engine.queuedNotes.addAll([n(55, 1, 0), n(57, 2, 0.5), ...heardEnough(2)]);
+    engine.queuedNotes.addAll([n(55, 1, 0), n(57, 2, 0.5), ...heardEnough(2, 8)]);
     await t.pump(const Duration(milliseconds: 150));
     await t.tap(find.text('Stop'));
     await t.pump();
     expect(saved.length, 1);
     final (r, start, end) = saved.single;
     expect(r.scale.id, 'g_major_1oct');
-    expect(r.notes.where((x) => x.played != null).length, 4);
+    expect(r.notes.where((x) => x.played != null).length, 8);
     expect(end.isBefore(start), isFalse);
   });
 
@@ -90,7 +92,7 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
-    engine.queuedNotes.addAll(heardEnough());
+    engine.queuedNotes.addAll(savable());
     await t.pump(const Duration(milliseconds: 150));
     await t.tap(find.text('Stop'));
     await t.pump();
@@ -112,7 +114,7 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
-    engine.queuedNotes.addAll(heardEnough());
+    engine.queuedNotes.addAll(savable());
     await t.pump(const Duration(milliseconds: 150));
     await t.tap(find.text('Stop'));
     await t.pump();
@@ -132,7 +134,7 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
-    engine.queuedNotes.addAll(heardEnough());
+    engine.queuedNotes.addAll(savable());
     await t.pump(const Duration(milliseconds: 150));
     await t.tap(find.text('Stop'));
     await t.pump();
@@ -314,7 +316,7 @@ void main() {
     });
 
     testWidgets('a wrong note is named with its expected note, with no cents', (t) async {
-      await playAndStop(t, [n(64, 0, 0), n(57, 0, 0.6), n(59, 0, 1.2), n(60, 0, 1.8), n(62, 0, 2.4)]);
+      await playAndStop(t, [n(64, 0, 0), for (var i = 1; i < 9; i++) n(g.notes[i].midi, 0, i * 0.6)]); // E4 where G3 was due, then 8 right
       expect(find.textContaining('played E4, expected G3'), findsOneWidget);
       expect(find.textContaining('+0¢'), findsWidgets);
       expect(find.textContaining('1029'), findsNothing);
