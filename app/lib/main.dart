@@ -20,6 +20,7 @@ import 'src/scales/grading_config.dart';
 import 'src/scales/scale.dart';
 import 'src/scales/scale_screen.dart';
 import 'src/settings_screen.dart';
+import 'src/speech.dart';
 
 void main() {
   runApp(const IntonoApp());
@@ -45,6 +46,8 @@ class _IntonoAppState extends State<IntonoApp> {
   ScaleLibrary? _library;
   GradingConfig _grading = const GradingConfig();
   CoachingConfig _coaching = const CoachingConfig();
+  final SpeechControl _speech = MethodChannelSpeech();
+  SpokenMode _spokenMode = SpokenMode.auto;
 
   @override
   void initState() {
@@ -60,7 +63,12 @@ class _IntonoAppState extends State<IntonoApp> {
         await store.close();
         return;
       }
-      setState(() => _store = store);
+      final mode = SpokenMode.parse(await store.setting(SpokenMode.settingKey));
+      if (!mounted) return;
+      setState(() {
+        _store = store;
+        _spokenMode = mode;
+      });
     } catch (_) {
       // no history this session; the scale screen still grades
     }
@@ -118,6 +126,11 @@ class _IntonoAppState extends State<IntonoApp> {
                   await store.clearHistory();
                 },
                 onClose: () => setState(() => _settings = false),
+                spokenMode: _spokenMode,
+                onSpokenModeChanged: (m) {
+                  setState(() => _spokenMode = m);
+                  _store?.setSetting(SpokenMode.settingKey, m.name);
+                },
               )
             : _scales && _library != null
             ? ScaleScreen(
@@ -126,6 +139,8 @@ class _IntonoAppState extends State<IntonoApp> {
                 library: _library!,
                 config: _grading,
                 onClose: () => setState(() => _scales = false),
+                speech: _speech,
+                speakSummary: () async => shouldSpeak(_spokenMode, headphones: await _audio.headphonesConnected()),
                 coach: (r) async {
                   final store = _store;
                   final history = store == null
