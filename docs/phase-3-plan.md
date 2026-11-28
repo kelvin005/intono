@@ -14,7 +14,7 @@ Architecture: `docs/architecture.md`; its Backend, Sync, remote-config and subsc
 | 4. Scale screen | **merged** (#33) |
 | 5. Finger/string results stored locally (drift) | **merged** (#41): every graded note, the totals as caches, Clear history, the database in Android/iOS backup. On-device test on the emulator and the Simulator. SQLite pinned by version and hash (#43, ADR 0015 Note 1) |
 | App uses scale mode | **merged** (#40): the scale screen gives the engine the expected sequence |
-| Replay of own audio (RAM, 60 s) | ADR 0013 accepted; **next**, with the review screen |
+| Replay of own audio (RAM, 60 s) | **merged** (#45): tap a note or "Play the run" on the review screen. Zeroed and released on leaving, Play again, background, close. Android stops the microphone during review; on iOS it stays on, discarding every sample (ADR 0013 note). **Needs Kelechi's phone check** |
 
 ## Open before Phase 3 closes
 
@@ -43,6 +43,8 @@ Phase 3 closes only when both of these are done, as the p3gate pre-registration 
 The on-device database test on the iOS Simulator hangs on its first attempt after a fresh build, right after "Xcode build done". #42
 handles it: a fresh boot, a 10-minute limit per attempt, one retry, a step limit. The retry passes in about 1.5 minutes. Each iOS run
 loses about 10 minutes. The cause (install, launch or VM-service connection) is not being chased now.
+On #45 (2026-11-28) both attempts hung once; a re-run passed on the first attempt. When the retry is not enough, the job fails and
+is re-run by hand.
 
 ## Decisions (Kelechi)
 
