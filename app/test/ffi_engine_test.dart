@@ -99,13 +99,15 @@ void main() {
       lib.intono_process(engine, buf + p, math.min(256, n - p));
     }
     calloc.free(buf);
+    // The engine decodes notes on its worker thread (ADR 0008), so the last note can come out after the last block was processed:
+    // keep reading until all are there or 2 s have passed (it failed once on a slow runner reading only once, #46).
     final got = <int>[];
-    var k = api.readNotes();
-    while (k > 0) {
+    for (var tries = 0; tries < 200 && got.length < scale.length; tries++) {
+      final k = api.readNotes();
       for (var i = 0; i < k; i++) {
         got.add(api.noteAt(i).midiNote);
       }
-      k = api.readNotes();
+      if (got.length < scale.length) sleep(const Duration(milliseconds: 10));
     }
     expect(got, scale);
     api.setExpected(const []); // back to free mode
