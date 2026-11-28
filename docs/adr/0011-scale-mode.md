@@ -120,3 +120,28 @@ now in force (thresholds in `grading.json`, nothing remote, ADR 0012); Kelechi p
    (they would not have been saved now), totals and `note_stats` are recomputed from `graded_notes`. It runs once per install.
 
 No change to `intono.h`, the DSP or the database schema.
+
+## Status note 2026-11-28: Start / Stop, live colour, "am I being heard?" (phone test findings, Kelechi)
+
+**What ended a run before:** only the last note of the scale being heard (at once), Stop, or the app leaving the foreground. There was no
+timeout, and choosing a scale started listening immediately, so a player who was not ready (or a silent room) produced a graded run.
+
+Now (thresholds in `grading.json`):
+
+1. **Choosing a scale shows the Start screen** (the scale's notes, a level bar, "Count-in: on/off", **Start**). **Start** begins the run,
+   after a 3-2-1 count-in (`count_in_seconds`, 3; the player can switch it off) if it is on. **Stop** ends it.
+2. **A run ends** on Stop, or `end_after_last_note_ms` (2 s) after the last note of the scale was graded, or `end_after_silence_ms`
+   (10 s) without sound once playing has started. Silence before the first note never ends a run. The app leaving the foreground still
+   ends it (and closes the Start screen's microphone).
+3. **Microphone before Start.** The Start screen opens the microphone so that the player can see "hearing: D4" and be told "It's very
+   quiet. Move the phone closer." (`quiet_warn_ms`, 2 s without sound). Nothing is graded, recorded or kept before Start: the engine
+   is in free mode, notes it reports are discarded, and the replay ring (ADR 0013) is armed only when the run starts.
+4. **Live colour.** During a note the glance view shows the current pitch against the note due (or the one after it, whichever is
+   nearer), from the frame stream, with the grade thresholds (🟢 5 / 🟡 15 / else 🔴; a wrong note is 🔴), within one display frame of
+   the note starting. When the note summary arrives (a fixed lag after the note, ADR 0004) the confirmed grade replaces it. The
+   results are unchanged.
+5. **Input level.** The engine reports no signal level (`intono_frame` has none), so the level bar and "hearing" come from the frame
+   stream: lit while the engine hears a played note. A true microphone level would need a C API change (`intono.h`) or native shim
+   code; not done here.
+
+No change to `intono.h`, the DSP or the database schema.

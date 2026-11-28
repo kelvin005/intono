@@ -3,7 +3,7 @@ import 'dart:convert';
 /// Scale grading thresholds (ADR 0011). In v1 they come from a file bundled with the app (assets/config/grading.json; no remote config,
 /// ADR 0012). The defaults here are the same values, so a missing or older file still grades the same way.
 class GradingConfig {
-  const GradingConfig({this.greenCents = 5, this.yellowCents = 15, this.minNoteMs = 80, this.mergeGapMs = 120, this.mergeMaxCentsDiff = 25, this.neighbourCents = 40, this.labelWindowCents = 60, this.minHeardFraction = 0.25, this.badRunFraction = 0.5, this.suggestMatchFraction = 0.6, this.suggestMinGain = 0.3});
+  const GradingConfig({this.greenCents = 5, this.yellowCents = 15, this.minNoteMs = 80, this.mergeGapMs = 120, this.mergeMaxCentsDiff = 25, this.neighbourCents = 40, this.labelWindowCents = 60, this.minHeardFraction = 0.25, this.badRunFraction = 0.5, this.suggestMatchFraction = 0.6, this.suggestMinGain = 0.3, this.countInSeconds = 0, this.endAfterLastNoteMs = 2000, this.endAfterSilenceMs = 10000, this.quietWarnMs = 2000});
 
   /// |cents| at or below this: 🟢.
   final double greenCents;
@@ -42,6 +42,18 @@ class GradingConfig {
   /// ... and the other scale must match this much more of them than the chosen one does.
   final double suggestMinGain;
 
+  /// The 3-2-1 count-in before a run, in seconds; 0: none. The Start screen lets the player switch it off.
+  final int countInSeconds;
+
+  /// A run ends this long after the last note of the scale was graded ...
+  final int endAfterLastNoteMs;
+
+  /// ... or after this long without sound once playing has started (or on Stop).
+  final int endAfterSilenceMs;
+
+  /// Before Start: no sound for this long shows "It's very quiet. Move the phone closer."
+  final int quietWarnMs;
+
   static const supportedFormat = 1;
 
   factory GradingConfig.fromJsonString(String text) {
@@ -61,10 +73,15 @@ class GradingConfig {
       badRunFraction: v('bad_run_fraction', d.badRunFraction),
       suggestMatchFraction: v('suggest_match_fraction', d.suggestMatchFraction),
       suggestMinGain: v('suggest_min_gain', d.suggestMinGain),
+      countInSeconds: (j['count_in_seconds'] as num?)?.toInt() ?? d.countInSeconds,
+      endAfterLastNoteMs: (j['end_after_last_note_ms'] as num?)?.toInt() ?? d.endAfterLastNoteMs,
+      endAfterSilenceMs: (j['end_after_silence_ms'] as num?)?.toInt() ?? d.endAfterSilenceMs,
+      quietWarnMs: (j['quiet_warn_ms'] as num?)?.toInt() ?? d.quietWarnMs,
     );
     if (!(c.greenCents > 0 && c.yellowCents >= c.greenCents && c.minNoteMs >= 0 && c.mergeGapMs >= 0 && c.mergeMaxCentsDiff >= 0 && c.neighbourCents >= c.yellowCents &&
         c.labelWindowCents >= c.neighbourCents && c.minHeardFraction > 0 && c.minHeardFraction <= 1 && c.badRunFraction > 0 && c.badRunFraction < 1 &&
-        c.suggestMatchFraction > 0 && c.suggestMatchFraction <= 1 && c.suggestMinGain > 0 && c.suggestMinGain <= 1)) {
+        c.suggestMatchFraction > 0 && c.suggestMatchFraction <= 1 && c.suggestMinGain > 0 && c.suggestMinGain <= 1 &&
+        c.countInSeconds >= 0 && c.endAfterLastNoteMs >= 0 && c.endAfterSilenceMs > 0 && c.quietWarnMs > 0)) {
       throw FormatException('inconsistent grading thresholds: $text');
     }
     return c;

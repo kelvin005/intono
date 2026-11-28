@@ -7,7 +7,7 @@ import '../audio_control.dart';
 import '../debug_screen.dart' show Disposable, EngineFactory;
 import '../engine_api.dart';
 import '../frame_poller.dart';
-import '../meter_state.dart' show noteName;
+import '../meter_state.dart' show MeterState, noteName;
 import '../speech.dart';
 import '../ui_button.dart';
 import 'grader.dart';
@@ -32,11 +32,16 @@ class ScaleColors {
       };
 }
 
-enum _Phase { pick, run, results }
+enum _Phase { pick, ready, countIn, run, results }
 
-/// Scale mode (ADR 0011 item 4): choose a scale, play it with the glance view (the whole screen the colour of the last note), then the
-/// results: the score with the 🟢/🟡/🔴 counts and every note coloured, with "Play again". The microphone feeds the engine only during a
-/// run; in review the session stays open for replay (ADR 0013): tap a note, or "Play the run".
+/// How often the run's clocks (silence, quiet, end of run) tick. A timer, not the frame clock, so they run while the screen is idle.
+const _tickMs = 250;
+
+/// Scale mode (ADR 0011 item 4): choose a scale, press Start (optionally after a 3-2-1 count-in), play it with the glance view (the whole
+/// screen the colour of the note being played), then the results: the score with the 🟢/🟡/🔴 counts and every note coloured, with "Play
+/// again". Before Start the microphone is open only to show that the phone hears you (nothing is graded, recorded or kept); the run ends
+/// on Stop, 2 s after the last note of the scale, or after 10 s of silence once playing has started. In review the session stays open
+/// for replay (ADR 0013): tap a note, or "Play the run".
 class ScaleScreen extends StatefulWidget {
   const ScaleScreen({
     super.key,
@@ -88,6 +93,16 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
   DateTime _runEnded = DateTime.now();
   bool _savePrompt = false; // a bad run (most notes missed or wrong): ask before it enters the history
   bool _declined = false;
+  Timer? _tickTimer; // the run's clocks (silence, quiet, end of run), every _tickMs
+  Timer? _countTimer; // the 3-2-1 count-in
+  int _count = 0;
+  bool _useCountIn = true;
+  int _quietMs = 0; // no sound heard, before Start
+  int _silentMs = 0; // no sound heard since the last one, during the run
+  int _afterLastMs = 0; // since the last note of the scale was graded
+  bool _quiet = false;
+  bool _playingStarted = false;
+  Grade? _live; // the colour of the note sounding now, from the frame stream, until its summary arrives
   ScaleSuggestion? _suggestion; // the run fits another octave or scale much better: "Switch?"
   bool _shifted = false; // the results are regraded at another octave: display only, never stored
   // Replay (ADR 0013): armed with each run; during review the session stays open (input paused) for playback.
@@ -99,6 +114,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
   @override
   void initState() {
     super.initState();
+    _useCountIn = widget.config.countInSeconds > 0;
     WidgetsBinding.instance.addObserver(this);
   }
 
@@ -125,12 +141,16 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
     if (state != AppLifecycleState.paused && state != AppLifecycleState.hidden) return;
     _stopSpeech();
     if (_phase == _Phase.run) _finish(keepReplay: false); // ADR 0013: nothing is kept when the app leaves the foreground
+    if (_phase == _Phase.ready || _phase == _Phase.countIn) _leaveReady();
     if (_reviewOpen) _endReview();
   }
 
-  Future<void> _start(ScaleDef s) async {
+  /// Picking a scale (or "Play again") does not start a run: it opens the microphone for the level check only (the engine hears, nothing
+  /// is graded, recorded or kept) and shows the Start screen.
+  Future<void> _open(ScaleDef s) async {
     if (_starting) return;
     _starting = true;
+    _cancelTimers();
     setState(() => _error = '');
     if (_reviewOpen) await _endReview(); // a new run releases the old one first (ADR 0013)
     if (!mounted) return;
@@ -148,23 +168,17 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
     }
     final pointer = await widget.audio.enginePointer();
     if (!mounted) return;
-    _replayArmed = await widget.audio.replayArm(); // the last 60 s of the run, in RAM only (ADR 0013)
-    if (!mounted) return;
-    final run = ScaleRun(s, widget.config);
     _engine = widget.engineFactory(pointer);
-    _engine!.setExpected([for (final n in s.notes) n.midi]); // score-informed segmentation (ADR 0014)
-    _poll = PollingController(vsync: this, engine: _engine!, onNotes: (notes) {
-      run.addNotes(notes);
-      if (run.complete) {
-        SchedulerBinding.instance.addPostFrameCallback((_) => _finish());
-      }
-      if (mounted) setState(() {});
-    })
-      ..start();
+    _poll = PollingController(vsync: this, engine: _engine!, onNotes: _onNotes)..start();
+    _poll!.meter.addListener(_onMeter);
+    _quietMs = 0;
+    _silentMs = 0;
+    _quiet = false;
+    _tickTimer = Timer.periodic(const Duration(milliseconds: _tickMs), _tick);
     setState(() {
       _starting = false;
       _scale = s;
-      _run = run;
+      _run = null;
       _result = null;
       _saveError = '';
       _tips = const [];
@@ -172,14 +186,129 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
       _declined = false;
       _suggestion = null;
       _shifted = false;
+      _live = null;
+      _phase = _Phase.ready;
+    });
+  }
+
+  /// Start: straight into the run, or into the count-in first.
+  void _begin() {
+    if (_phase != _Phase.ready) return;
+    final secs = _useCountIn ? widget.config.countInSeconds : 0;
+    if (secs <= 0) {
+      _go();
+      return;
+    }
+    setState(() {
+      _phase = _Phase.countIn;
+      _count = secs;
+    });
+    _countTimer = Timer.periodic(const Duration(seconds: 1), (t) {
+      if (_count <= 1) {
+        t.cancel();
+        _countTimer = null;
+        _go();
+      } else if (mounted) {
+        setState(() => _count--);
+      }
+    });
+  }
+
+  void _cancelCount() {
+    _countTimer?.cancel();
+    _countTimer = null;
+    if (_phase == _Phase.countIn) setState(() => _phase = _Phase.ready);
+  }
+
+  /// The run starts: the replay ring is armed (ADR 0013), the engine is given the scale (ADR 0014) and grading begins.
+  Future<void> _go() async {
+    final s = _scale;
+    final e = _engine;
+    if (s == null || e == null || (_phase != _Phase.ready && _phase != _Phase.countIn)) return;
+    _replayArmed = await widget.audio.replayArm(); // the last 60 s of the run, in RAM only (ADR 0013)
+    if (!mounted || _engine == null || (_phase != _Phase.ready && _phase != _Phase.countIn)) return;
+    final run = ScaleRun(s, widget.config);
+    e.setExpected([for (final n in s.notes) n.midi]); // score-informed segmentation (ADR 0014)
+    _silentMs = 0;
+    _afterLastMs = 0;
+    _playingStarted = false;
+    _live = null;
+    setState(() {
+      _run = run;
       _runStarted = DateTime.now();
       _phase = _Phase.run;
     });
   }
 
+  /// Note summaries from the engine: graded only during a run (before Start the engine listens, nothing more).
+  void _onNotes(List<Note> notes) {
+    final run = _run;
+    if (_phase != _Phase.run || run == null) return;
+    run.addNotes(notes);
+    _playingStarted = true;
+    _live = null; // the confirmed grade replaces the live colour
+    if (mounted) setState(() {});
+  }
+
+  /// The live colour (ADR 0011 item 4, phone test 2026-11-28): while a note sounds, the glance view shows how the current pitch fits
+  /// the note due, from the frame stream, instead of waiting for the note summary (a whole note behind on a slow scale).
+  void _onMeter() {
+    if (_phase != _Phase.run) return;
+    final run = _run;
+    final m = _poll?.meter.value;
+    if (run == null || m == null) return;
+    final g = m.voiced ? run.liveGrade(m.midiNote, m.cents) : null;
+    if (g != _live && mounted) setState(() => _live = g);
+  }
+
+  void _tick(Timer _) {
+    if (!mounted) return;
+    final voiced = _poll?.meter.value.voiced ?? false;
+    if (voiced) {
+      _silentMs = 0;
+      _quietMs = 0;
+    } else {
+      _silentMs += _tickMs;
+      _quietMs += _tickMs;
+    }
+    switch (_phase) {
+      case _Phase.ready:
+        final quiet = _quietMs >= widget.config.quietWarnMs;
+        if (quiet != _quiet) setState(() => _quiet = quiet);
+      case _Phase.run:
+        final run = _run;
+        if (run == null) return;
+        if (voiced) _playingStarted = true;
+        if (run.complete) {
+          _afterLastMs += _tickMs;
+          if (_afterLastMs >= widget.config.endAfterLastNoteMs) _finish();
+        } else {
+          _afterLastMs = 0;
+          if (_playingStarted && _silentMs >= widget.config.endAfterSilenceMs) _finish();
+        }
+      default:
+        break;
+    }
+  }
+
+  void _cancelTimers() {
+    _tickTimer?.cancel();
+    _tickTimer = null;
+    _countTimer?.cancel();
+    _countTimer = null;
+  }
+
+  /// Back from the Start screen (or the app leaving the foreground): the microphone closes.
+  void _leaveReady() {
+    _stopCapture();
+    setState(() => _phase = _Phase.pick);
+  }
+
   /// Ends grading. With [keepReplay] and an armed ring the session stays open for the review (input paused); otherwise the ring is
   /// released and capture closes.
   void _stopCapture({bool keepReplay = false}) {
+    _cancelTimers();
+    _poll?.meter.removeListener(_onMeter);
     _poll?.dispose();
     _poll = null;
     final e = _engine;
@@ -330,6 +459,8 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
         style: const TextStyle(color: Color(0xFFE8ECEF), fontSize: 16, decoration: TextDecoration.none),
         child: switch (_phase) {
           _Phase.pick => _picker(),
+          _Phase.ready => _readyView(),
+          _Phase.countIn => _countInView(),
           _Phase.run => _glance(),
           _Phase.results => _results(),
         },
@@ -350,9 +481,65 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
                 GestureDetector(
                   key: ValueKey('scale-tile:${s.id}'),
                   behavior: HitTestBehavior.opaque,
-                  onTap: () => _start(s),
+                  onTap: () => _open(s),
                   child: Padding(padding: const EdgeInsets.symmetric(vertical: 10), child: Text(s.title)),
                 ),
+            ]),
+          ),
+        ),
+      );
+
+  /// "Am I being heard?": a small level bar (lit while the engine hears a played note) and the note it hears, e.g. "hearing: D4".
+  Widget _hearing() {
+    final meter = _poll?.meter;
+    if (meter == null) return const SizedBox.shrink();
+    return ValueListenableBuilder<MeterState>(
+      valueListenable: meter,
+      builder: (context, m, _) => Row(children: [
+        Container(key: const Key('input-level'), width: 60, height: 8, color: m.voiced ? ScaleColors.green : ScaleColors.missed),
+        const SizedBox(width: 10),
+        Text('hearing: ${m.voiced ? noteName(m.midiNote) : '--'}', style: const TextStyle(fontSize: 14)),
+      ]),
+    );
+  }
+
+  /// The Start screen: the scale, whether the phone hears you, an optional count-in, Start.
+  Widget _readyView() => ColoredBox(
+        color: ScaleColors.neutral,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              AppButton(label: 'Back', onTap: _leaveReady),
+              const SizedBox(height: 12),
+              Text(_scale!.title, style: const TextStyle(fontSize: 22)),
+              const SizedBox(height: 8),
+              Text([for (final n in _scale!.notes) n.name].join('  '), style: const TextStyle(fontSize: 14)),
+              const SizedBox(height: 16),
+              _hearing(),
+              if (_quiet) const Padding(padding: EdgeInsets.only(top: 8), child: Text("It's very quiet. Move the phone closer.")),
+              const Spacer(),
+              if (widget.config.countInSeconds > 0) ...[
+                AppButton(label: 'Count-in: ${_useCountIn ? 'on' : 'off'}', onTap: () => setState(() => _useCountIn = !_useCountIn)),
+                const SizedBox(height: 12),
+              ],
+              AppButton(label: 'Start', onTap: _begin),
+            ]),
+          ),
+        ),
+      );
+
+  Widget _countInView() => ColoredBox(
+        color: ScaleColors.neutral,
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(_scale!.title, style: const TextStyle(fontSize: 20)),
+              const Spacer(),
+              Center(child: Text('$_count', key: const Key('count-in'), style: const TextStyle(fontSize: 96))),
+              const Spacer(),
+              AppButton(label: 'Cancel', onTap: _cancelCount),
             ]),
           ),
         ),
@@ -363,7 +550,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
     final run = _run!;
     return ColoredBox(
       key: const Key('glance'),
-      color: ScaleColors.of(run.latestGrade),
+      color: ScaleColors.of(_live ?? run.latestGrade),
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(20),
@@ -373,6 +560,8 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
               Text(_scale!.title, style: const TextStyle(fontSize: 20)),
               const SizedBox(height: 6),
               Text('${run.result().notes.where((g) => g.heard != null).length} of ${_scale!.notes.length} notes'),
+              const SizedBox(height: 8),
+              _hearing(),
               const Spacer(),
               AppButton(label: 'Stop', onTap: _finish),
             ],
@@ -403,7 +592,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
               const SizedBox(height: 16),
               const Text("I didn't hear you play. Check the microphone, come closer, or play louder.", style: TextStyle(fontSize: 20)),
               const SizedBox(height: 24),
-              AppButton(label: 'Play again', onTap: () => _start(r.scale)),
+              AppButton(label: 'Play again', onTap: () => _open(r.scale)),
               const SizedBox(height: 12),
               AppButton(label: 'Scales', onTap: () => setState(() => _phase = _Phase.pick)),
             ]),
@@ -490,7 +679,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
                   : AppButton(label: 'Play the run', onTap: () => _playRun(r)),
             ],
             const SizedBox(height: 20),
-            AppButton(label: 'Play again', onTap: () => _start(r.scale.octaveShift != 0 ? _scale! : r.scale)),
+            AppButton(label: 'Play again', onTap: () => _open(r.scale.octaveShift != 0 ? _scale! : r.scale)),
             const SizedBox(height: 12),
             AppButton(
                 label: 'Scales',
