@@ -1,0 +1,17 @@
+{
+  "comment": "ADR 0015 Note 1. package:sqlite3's build hook downloads prebuilt SQLite from the package's GitHub release and checks each file against sha256 hashes compiled into the package. This file pins the package (version and archive hash, as in pubspec.lock), the release tag, the download URL pattern and every binary the app and its host tests use. .github/scripts/check_sqlite_pin.py fails CI on any difference. Hashes verified independently on 2026-11-28 by downloading each file from the release. SQLite 3.54.1. To update: change the version in pubspec.lock, re-verify every hash from the release, and record the update in ADR 0015.",
+  "package": "sqlite3",
+  "version": "3.9.2",
+  "package_sha256": "1ae2e821614e7b69628ecb64273e8bc5401b14ab166ee7ea0035c35bb136cbd7",
+  "release_tag": "sqlite3-3.9.2",
+  "url_pattern": "https://github.com/simolus3/sqlite3.dart/releases/download/$RELEASE_TAG/$FILENAME",
+  "assets": {
+    "libsqlite3.arm64.android.so": "e684ef8646ffd48b95bae58bf29c55ffd85acebac2a7118ffde9fd02df37d629",
+    "libsqlite3.arm.android.so": "f33868d94e80992af137c7cf046a99406800f15434e289733cf472346be00ed4",
+    "libsqlite3.x64.android.so": "ff28e78c5b790b3eafc15ceface32c3f5626ef80f622a726c60b0b802825699a",
+    "libsqlite3.arm64.ios.dylib": "468c7c973a193b0e01551a6d08ec8c142ca9a6299e41df3cd350c268aac796fb",
+    "libsqlite3.arm64.ios_sim.dylib": "07b32a83d66e78e473ea0decfd53109a6123c650fb87255eebae8835111d49e1",
+    "libsqlite3.x64.ios_sim.dylib": "46094fc4d8ae1a6a3fcd07d6ae97ef98703e5d4b6fee9d8c5be8a1a91e9f04f5",
+    "libsqlite3.x64.linux.so": "0a65852703763619a7a34633b4959b3b86c4103804a4dfe4e8b27b5de1c0647b"
+  }
+}
