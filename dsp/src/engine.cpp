@@ -382,7 +382,25 @@ struct intono_engine {
 
   void emit_note(const intono::NoteSummary& ns) {
     const double hz = 440.0 * std::exp2(ns.mean_c / 1200.0);
-    const intono::Target t = intono::nearest_target(hz, tuning, cfg.a4_hz, tonic.load(std::memory_order_relaxed));
+    const int tonic_midi = tonic.load(std::memory_order_relaxed);
+    intono::Target t = intono::nearest_target(hz, tuning, cfg.a4_hz, tonic_midi);
+    // Scale mode (ADR 0018): a note whose mean is within kScaleLabelWindow of a note that is due (expected[k] or expected[k+1]) is that
+    // note, even if another semitone is nearer: a note played 36 cents sharp with vibrato has a mean that wanders past the +-50 cent
+    // boundary. Free mode (cursor plain): the nearest target, as before.
+    if (cursor.due(0) >= 0 && t.midi_note != cursor.due(0) && t.midi_note != cursor.due(1)) {
+      double best = intono::kScaleLabelWindow + 1.0;
+      intono::Target pick;
+      for (int i = 0; i < 2; ++i) {
+        const int d = cursor.due(i);
+        if (d < 0) continue;
+        const intono::Target c = intono::target_for_midi(hz, tuning, cfg.a4_hz, tonic_midi, d);
+        if (c.hz > 0.0 && std::fabs(c.cents) <= intono::kScaleLabelWindow && std::fabs(c.cents) < best) {
+          best = std::fabs(c.cents);
+          pick = c;
+        }
+      }
+      if (pick.hz > 0.0) t = pick;
+    }
     intono_note n{};
     n.t_start = ns.t_start;
     n.t_end = ns.t_end;
