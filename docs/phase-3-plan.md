@@ -16,7 +16,7 @@ Architecture: `docs/architecture.md`; its Backend, Sync, remote-config and subsc
 | iOS: microphone off during review | **#46**: an output-only engine for the review. **Required before TestFlight** (Kelechi, 2026-11-28) |
 | Sealed set for 60 to 80 cent steps (semitones 20 to 40¢ off), recall ≥ 0.99, invented ≤ 0.5 % | **Not registered.** On dev seeds the current engine gets 0.891 and 1.93 % (`tools/accuracy/reports/phase3/semitone_dev.md`); passing needs a scale-mode decoder change under the DSP freeze. **Waiting on Kelechi's decision** |
 | Finger/string heatmap screen (from `graded_notes`, last 30 days) | **#47** |
-| Coaching tips in words (rule-based templates) | next |
+| Coaching tips in words (rule-based templates) | **#49**: ADR 0016 proposed (thresholds and rules); **needs Kelechi's "merge"** |
 | Spoken summary after a run (on-device TTS, microphone paused) | after the tips |
 | App uses scale mode | **merged** (#40): the scale screen gives the engine the expected sequence |
 | Replay of own audio (RAM, 60 s) | **merged** (#45): tap a note or "Play the run" on the review screen. Zeroed and released on leaving, Play again, background, close. Android stops the microphone during review; on iOS it stays on, discarding every sample (ADR 0013 note). **Needs Kelechi's phone check** |
