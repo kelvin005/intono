@@ -1,4 +1,5 @@
 import AVFAudio
+import AVFoundation
 import Flutter
 import IntonoNative
 import UIKit
@@ -16,12 +17,22 @@ public class IntonoIosPlugin: NSObject, FlutterPlugin {
     let channel = FlutterMethodChannel(name: "intono/audio", binaryMessenger: registrar.messenger())
     let instance = IntonoIosPlugin()
     registrar.addMethodCallDelegate(instance, channel: channel)
+    // ADR 0017: the spoken summary, on its own channel
+    let speechChannel = FlutterMethodChannel(name: "intono/speech", binaryMessenger: registrar.messenger())
+    let speech = SpokenSummary()
+    speechChannel.setMethodCallHandler { call, result in speech.handle(call, result: result) }
+    instance.speech = speech
     // Never record in the background: Dart stops capture on its own lifecycle signal first, this is the backstop.
     NotificationCenter.default.addObserver(instance, selector: #selector(didEnterBackground),
                                            name: UIApplication.didEnterBackgroundNotification, object: nil)
   }
 
-  @objc private func didEnterBackground() { stop() }
+  private var speech: SpokenSummary?
+
+  @objc private func didEnterBackground() {
+    speech?.stop()
+    stop()
+  }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
     let args = call.arguments as? [String: Any] ?? [:]
@@ -136,5 +147,32 @@ public class IntonoIosPlugin: NSObject, FlutterPlugin {
       default: s.requestRecordPermission(finish)
       }
     }
+  }
+}
+
+/// The spoken summary after a run (ADR 0017): AVSpeechSynthesizer with the device language's voice (on the device). Dart asks for speech
+/// only after the run's capture has ended (the session's engine is stopped at freeze), so the microphone is off whenever this speaks.
+final class SpokenSummary {
+  private let synth = AVSpeechSynthesizer()
+
+  func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+    switch call.method {
+    case "speak":
+      let text = (call.arguments as? [String: Any])?["text"] as? String ?? ""
+      stop()
+      let u = AVSpeechUtterance(string: text)
+      u.voice = AVSpeechSynthesisVoice(language: AVSpeechSynthesisVoice.currentLanguageCode())
+      synth.speak(u)
+      result(true)
+    case "stopSpeaking":
+      stop()
+      result(nil)
+    default:
+      result(FlutterMethodNotImplemented)
+    }
+  }
+
+  func stop() {
+    if synth.isSpeaking { synth.stopSpeaking(at: .immediate) }
   }
 }

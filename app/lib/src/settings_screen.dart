@@ -1,14 +1,25 @@
 import 'package:flutter/widgets.dart';
 
+import 'speech.dart';
 import 'ui_button.dart';
 
 /// Settings. v1 has one: "Clear history" (ADR 0015 decision 9), which deletes every stored session only after a confirmation; the
 /// settings themselves are kept.
 class SettingsScreen extends StatefulWidget {
-  const SettingsScreen({super.key, required this.onClearHistory, required this.onClose});
+  const SettingsScreen({
+    super.key,
+    required this.onClearHistory,
+    required this.onClose,
+    this.spokenMode = SpokenMode.auto,
+    this.onSpokenModeChanged,
+  });
 
   final Future<void> Function() onClearHistory;
   final VoidCallback onClose;
+
+  /// The spoken summary after a run (ADR 0017); tapping cycles auto (with headphones), on, off.
+  final SpokenMode spokenMode;
+  final ValueChanged<SpokenMode>? onSpokenModeChanged;
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -50,6 +61,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 12),
                 const Text('Settings', style: TextStyle(fontSize: 22)),
                 const SizedBox(height: 20),
+                if (widget.onSpokenModeChanged != null) ...[
+                  AppButton(
+                      label: 'Spoken summary: ${widget.spokenMode.label}',
+                      onTap: () => widget.onSpokenModeChanged!(widget.spokenMode.next)),
+                  const SizedBox(height: 12),
+                ],
                 if (!_confirming) AppButton(label: 'Clear history', onTap: () => setState(() {
                       _confirming = true;
                       _status = '';

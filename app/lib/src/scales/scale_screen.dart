@@ -7,6 +7,7 @@ import '../audio_control.dart';
 import '../debug_screen.dart' show Disposable, EngineFactory;
 import '../engine_api.dart';
 import '../frame_poller.dart';
+import '../speech.dart';
 import '../ui_button.dart';
 import 'grader.dart';
 import 'grading_config.dart';
@@ -45,6 +46,8 @@ class ScaleScreen extends StatefulWidget {
     required this.onClose,
     this.onRunFinished,
     this.coach,
+    this.speech,
+    this.speakSummary,
   });
 
   final AudioControl audio;
@@ -60,6 +63,10 @@ class ScaleScreen extends StatefulWidget {
   /// The coaching tips for a finished run (ADR 0016), asked for after [onRunFinished] completes so the history includes the run.
   final Future<List<String>> Function(ScaleResult result)? coach;
 
+  /// The spoken summary (ADR 0017): spoken after the run, once capture has ended (the microphone is off), if [speakSummary] says so.
+  final SpeechControl? speech;
+  final Future<bool> Function()? speakSummary;
+
   @override
   State<ScaleScreen> createState() => _ScaleScreenState();
 }
@@ -74,6 +81,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
   String _error = '';
   String _saveError = '';
   List<String> _tips = const [];
+  bool _speaking = false;
   bool _starting = false;
   DateTime _runStarted = DateTime.now();
   // Replay (ADR 0013): armed with each run; during review the session stays open (input paused) for playback.
@@ -91,6 +99,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _stopSpeech();
     _playPoll?.cancel();
     _playPoll = null;
     if (_reviewOpen) {
@@ -108,6 +117,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state != AppLifecycleState.paused && state != AppLifecycleState.hidden) return;
+    _stopSpeech();
     if (_phase == _Phase.run) _finish(keepReplay: false); // ADR 0013: nothing is kept when the app leaves the foreground
     if (_reviewOpen) _endReview();
   }
@@ -178,6 +188,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
 
   /// Ends the review: stops playback, releases (zeroes) the ring, then closes the session.
   Future<void> _endReview() async {
+    _stopSpeech();
     if (!_reviewOpen) return;
     _reviewOpen = false;
     _replayArmed = false;
@@ -191,6 +202,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
 
   Future<void> _play(double from, double to) async {
     if (!_reviewOpen) return;
+    _stopSpeech(); // the summary and the replay would talk over each other
     final ok = await widget.audio.replayPlay(from, to);
     if (!mounted || !ok) return;
     setState(() => _playing = true);
@@ -232,13 +244,38 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
       }
     }
     final coach = widget.coach;
-    if (coach == null) return;
-    try {
-      final tips = await coach(r);
-      if (mounted && identical(_result, r)) setState(() => _tips = tips);
-    } catch (_) {
-      // no tips this time; the results stand on their own
+    var tips = const <String>[];
+    if (coach != null) {
+      try {
+        tips = await coach(r);
+        if (mounted && identical(_result, r)) setState(() => _tips = tips);
+      } catch (_) {
+        // no tips this time; the results stand on their own
+      }
     }
+    await _speak(r, tips);
+  }
+
+  /// ADR 0017: only on the results, after _stopCapture (capture frozen or closed: the microphone is off), never during a run.
+  Future<void> _speak(ScaleResult r, List<String> tips) async {
+    final speech = widget.speech;
+    final ask = widget.speakSummary;
+    if (speech == null || ask == null || _phase != _Phase.results || !identical(_result, r)) return;
+    bool yes;
+    try {
+      yes = await ask();
+    } catch (_) {
+      yes = false;
+    }
+    if (!yes || !mounted || _phase != _Phase.results || !identical(_result, r)) return;
+    _speaking = true;
+    await speech.speak(spokenSummary(r, tips));
+  }
+
+  void _stopSpeech() {
+    if (!_speaking) return;
+    _speaking = false;
+    widget.speech?.stop();
   }
 
   @override

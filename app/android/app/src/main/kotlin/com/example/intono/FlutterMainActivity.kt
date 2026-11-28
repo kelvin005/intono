@@ -16,11 +16,29 @@ class FlutterMainActivity : FlutterActivity() {
     private val audio = NativeAudio()
     private lateinit var monitor: HeadphoneMonitor
     private var pendingStart: MethodChannel.Result? = null
+    private var speech: Speech? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         monitor = HeadphoneMonitor(this) { }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "intono/audio").setMethodCallHandler(::onCall)
+        // ADR 0017: the spoken summary, created on first use
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "intono/speech").setMethodCallHandler { call, result ->
+            when (call.method) {
+                "speak" -> {
+                    val s = speech ?: Speech(this).also { speech = it }
+                    result.success(s.speak(call.argument<String>("text") ?: ""))
+                }
+                "stopSpeaking" -> { speech?.stop(); result.success(null) }
+                else -> result.notImplemented()
+            }
+        }
+    }
+
+    override fun onDestroy() {
+        speech?.shutdown()
+        speech = null
+        super.onDestroy()
     }
 
     private fun onCall(call: MethodCall, result: MethodChannel.Result) {
@@ -89,6 +107,7 @@ class FlutterMainActivity : FlutterActivity() {
 
     /** Never record in the background; Dart stops capture on its own lifecycle signal first, this is the backstop. */
     override fun onStop() {
+        speech?.stop()
         audio.stop()
         keepScreenOn(false)
         super.onStop()
