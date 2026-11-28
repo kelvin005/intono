@@ -1,5 +1,7 @@
 import 'dart:convert';
 
+import '../meter_state.dart' show noteName;
+
 /// One note of a scale: what to play (MIDI number, 12-TET name) and where, in first position (string, finger, low/high placement).
 /// The target pitch is not here: the grader applies the A4 reference and the tuning system (ADR 0011).
 class ScaleNote {
@@ -37,6 +39,7 @@ class ScaleDef {
     required this.position,
     required this.ascendingCount,
     required this.notes,
+    this.octaveShift = 0,
   });
 
   final String id;
@@ -53,6 +56,27 @@ class ScaleDef {
   /// How many of [notes] are the ascending half (including the top tonic).
   final int ascendingCount;
   final List<ScaleNote> notes;
+
+  /// Semitones this scale was moved from the library's scale (±12): a scale made by [shifted] for regrading a run played an octave
+  /// off. 0 for a scale of the library. Its string and finger data are the original's and mean nothing at the new pitch, so results
+  /// graded against it are never stored (ADR 0011 status note).
+  final int octaveShift;
+
+  /// The same scale [semitones] higher (negative: lower). Only for regrading; see [octaveShift].
+  ScaleDef shifted(int semitones) => ScaleDef(
+        id: id,
+        title: '$title (${semitones > 0 ? 'an octave higher' : 'an octave lower'})',
+        key: key,
+        type: type,
+        octaves: octaves,
+        position: position,
+        ascendingCount: ascendingCount,
+        octaveShift: octaveShift + semitones,
+        notes: [
+          for (final n in notes)
+            ScaleNote(midi: n.midi + semitones, name: noteName(n.midi + semitones), string: n.string, finger: n.finger, placement: n.placement)
+        ],
+      );
 
   factory ScaleDef.fromJson(Map<String, dynamic> j) => ScaleDef(
         id: j['id'] as String,

@@ -331,4 +331,54 @@ void main() {
       expect(gradeScale(gMajor, first(8), cfg).badRun, isFalse); // 7 missed
     });
   });
+
+  group('octave and scale suggestions (Kelechi phone test, 2026-11-28)', () {
+    List<Note> playShifted(ScaleDef s, int semitones) => [for (var i = 0; i < s.notes.length; i++) note(s.notes[i].midi + semitones, 0, i * 0.6)];
+
+    test('a scale played an octave higher suggests +12, and regrading at that octave grades every note', () {
+      final played = playShifted(gMajor, 12);
+      final s = suggestScale(gMajor, played, lib, cfg);
+      expect(s, isNotNull);
+      expect(s!.kind, SuggestionKind.octave);
+      expect(s.semitones, 12);
+      expect(s.message, 'You seem to be playing an octave higher. Switch?');
+      final r = gradeScale(s.scale, played, cfg);
+      expect(r.green, 15);
+      expect(r.scorePercent, 100);
+      expect(s.scale.octaveShift, 12);
+      expect(s.scale.notes.first.name, 'G4');
+    });
+
+    test('an octave lower suggests -12', () {
+      final s = suggestScale(gMajor, playShifted(gMajor, -12), lib, cfg);
+      expect(s!.kind, SuggestionKind.octave);
+      expect(s.semitones, -12);
+      expect(s.message, 'You seem to be playing an octave lower. Switch?');
+    });
+
+    test('a scale played in tune, or with a few errors, suggests nothing', () {
+      expect(suggestScale(gMajor, play(gMajor), lib, cfg), isNull);
+      expect(suggestScale(gMajor, play(gMajor, cents: {2: 30, 5: -25}), lib, cfg), isNull);
+    });
+
+    test('another scale played (D major while G major is selected) suggests that scale', () {
+      final d = lib.byId('d_major_1oct')!;
+      final s = suggestScale(gMajor, play(d), lib, cfg);
+      expect(s, isNotNull);
+      expect(s!.kind, SuggestionKind.scale);
+      expect(s.scale.id, 'd_major_1oct');
+      expect(s.message, 'This sounds like D major, 1 octave. Switch?');
+    });
+
+    test('noise that fits nothing, or too few notes, suggests nothing', () {
+      expect(suggestScale(gMajor, [for (var i = 0; i < 10; i++) note(73, 0, i * 0.6)], lib, cfg), isNull);
+      expect(suggestScale(gMajor, playShifted(gMajor, 12).take(3).toList(), lib, cfg), isNull);
+    });
+
+    test('the suggestion thresholds are in grading.json', () {
+      final bundled = GradingConfig.fromJsonString(File('assets/config/grading.json').readAsStringSync());
+      expect((bundled.suggestMatchFraction, bundled.suggestMinGain, bundled.labelWindowCents, bundled.minHeardFraction, bundled.badRunFraction),
+          (0.6, 0.3, 60.0, 0.25, 0.5));
+    });
+  });
 }

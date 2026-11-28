@@ -348,4 +348,63 @@ void main() {
       expect(find.textContaining('Not saved'), findsOneWidget);
     });
   });
+
+  group('octave and scale suggestions', () {
+    Future<void> playAll(WidgetTester t, List<Note> notes) async {
+      await t.pumpWidget(host(ScaleScreen(
+        audio: audio,
+        engineFactory: (_) => engine,
+        library: lib,
+        config: const GradingConfig(),
+        onClose: () {},
+        onRunFinished: (r, s, e) async => saved.add((r, s, e)),
+      )));
+      await t.tap(find.text('G major, 1 octave'));
+      await t.pump();
+      await t.pump();
+      engine.queuedNotes.addAll(notes);
+      await t.pump(const Duration(milliseconds: 150));
+      if (t.any(find.text('Stop'))) await t.tap(find.text('Stop'));
+      await t.pump();
+      await t.pump();
+    }
+
+    List<Note> played(ScaleDef s, int semitones) => [for (var i = 0; i < s.notes.length; i++) n(s.notes[i].midi + semitones, 0, i * 0.6)];
+
+    testWidgets('a scale played an octave higher: the suggestion is shown, nothing is saved yet; one tap regrades it, and it is never stored', (t) async {
+      await playAll(t, played(g, 12));
+      expect(find.text('You seem to be playing an octave higher. Switch?'), findsOneWidget);
+      expect(saved, isEmpty);
+      await t.tap(find.text('Switch'));
+      await t.pump();
+      await t.pump();
+      expect(find.text('100 %'), findsOneWidget);
+      expect(find.textContaining('Graded at the octave you played'), findsOneWidget);
+      expect(find.textContaining('Save this run?'), findsNothing);
+      expect(saved, isEmpty, reason: 'the string and finger data do not fit the octave played');
+      await t.tap(find.text('Play again'));
+      await t.pump();
+      await t.pump();
+      expect(find.text('G major, 1 octave'), findsOneWidget, reason: 'Play again repeats the chosen scale, not the shifted one');
+    });
+
+    testWidgets('another scale played: Switch regrades it as that scale and saves it', (t) async {
+      final d = lib.byId('d_major_1oct')!;
+      await playAll(t, played(d, 0));
+      expect(find.text('This sounds like D major, 1 octave. Switch?'), findsOneWidget);
+      expect(saved, isEmpty);
+      await t.tap(find.text('Switch'));
+      await t.pump();
+      await t.pump();
+      expect(find.text('100 %'), findsOneWidget);
+      expect(saved.length, 1);
+      expect(saved.single.$1.scale.id, 'd_major_1oct');
+    });
+
+    testWidgets('a good run on the chosen scale has no suggestion and is saved', (t) async {
+      await playAll(t, played(g, 0));
+      expect(find.textContaining('Switch?'), findsNothing);
+      expect(saved.length, 1);
+    });
+  });
 }

@@ -88,6 +88,8 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
   DateTime _runEnded = DateTime.now();
   bool _savePrompt = false; // a bad run (most notes missed or wrong): ask before it enters the history
   bool _declined = false;
+  ScaleSuggestion? _suggestion; // the run fits another octave or scale much better: "Switch?"
+  bool _shifted = false; // the results are regraded at another octave: display only, never stored
   // Replay (ADR 0013): armed with each run; during review the session stays open (input paused) for playback.
   bool _replayArmed = false;
   bool _reviewOpen = false;   // the audio session is still open for the review
@@ -168,6 +170,8 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
       _tips = const [];
       _savePrompt = false;
       _declined = false;
+      _suggestion = null;
+      _shifted = false;
       _runStarted = DateTime.now();
       _phase = _Phase.run;
     });
@@ -234,15 +238,37 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
     final result = _run!.result();
     _stopCapture(keepReplay: keepReplay && !result.notHeard); // nothing heard: nothing to replay
     final ended = DateTime.now();
+    final suggestion = result.notHeard ? null : _run!.suggestion(widget.library);
     setState(() {
       _result = result;
       _runEnded = ended;
-      _savePrompt = result.badRun;
+      _suggestion = suggestion;
+      _shifted = false;
+      _savePrompt = result.badRun || suggestion != null;
       _declined = false;
       _phase = _Phase.results;
     });
-    // "I didn't hear you play": no grade, no save, no tips, no heatmap. A bad run waits for the player's answer to "Save this run?".
-    if (!result.notHeard && !result.badRun) _save(result, _runStarted, ended);
+    // "I didn't hear you play": no grade, no save, no tips, no heatmap. A bad run, or one that fits another octave or scale much better,
+    // waits for the player's answer ("Switch?", "Save this run?").
+    if (!result.notHeard && !result.badRun && suggestion == null) _save(result, _runStarted, ended);
+  }
+
+  /// Regrades the same notes against the suggested octave or scale. A scale is a real run of that scale (saved if it is good); an
+  /// octave is shown only: the string and finger data would be wrong for the notes played, so it never reaches the history.
+  void _switchTo(ScaleSuggestion s) {
+    final run = _run;
+    if (run == null || _phase != _Phase.results) return;
+    final r = run.regrade(s.scale);
+    final shifted = s.kind == SuggestionKind.octave;
+    setState(() {
+      _result = r;
+      _suggestion = null;
+      _shifted = shifted;
+      _savePrompt = !shifted && r.badRun;
+      _declined = false;
+      _tips = const [];
+    });
+    if (!shifted && !r.notHeard && !r.badRun) _save(r, _runStarted, _runEnded);
   }
 
   void _answerSave(bool yes) {
@@ -389,12 +415,13 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
     final r = _result!;
     if (r.notHeard) return _notHeard(r);
     String cents(double? c) => c == null ? 'missed' : '${c >= 0 ? '+' : ''}${c.toStringAsFixed(0)}¢';
-    String where(ScaleNote n) =>
-        '${n.string} ${n.finger == 0 ? 'open' : '${n.finger}${n.placement == null ? '' : ' ${n.placement}'}'}';
+    String where(ScaleNote n) => _shifted
+        ? '' // the string and finger of the chosen octave mean nothing at the octave that was played
+        : '${n.string} ${n.finger == 0 ? 'open' : '${n.finger}${n.placement == null ? '' : ' ${n.placement}'}'}';
     // ADR 0018 note: a note far from the expected one also names the nearest semitone
     String hint(GradedNote g) {
       final h = neighbourHint(g, widget.config);
-      return h == null ? '' : '\n${h.closer ? 'sounds closer to' : 'almost'} ${h.name}';
+      return h == null ? '' : '${h.closer ? 'sounds closer to' : 'almost'} ${h.name}';
     }
     return ColoredBox(
       color: ScaleColors.neutral,
@@ -406,6 +433,14 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
             const SizedBox(height: 8),
             Text('${r.scorePercent.round()} %', style: const TextStyle(fontSize: 48)),
             Text('🟢 ${r.green}   🟡 ${r.yellow}   🔴 ${r.red + r.missed}'),
+            if (_shifted)
+              const Padding(padding: EdgeInsets.only(top: 8), child: Text('Graded at the octave you played. Not added to your progress.')),
+            if (_suggestion != null) ...[
+              const SizedBox(height: 12),
+              Text(_suggestion!.message),
+              const SizedBox(height: 8),
+              AppButton(label: 'Switch', onTap: () => _switchTo(_suggestion!)),
+            ],
             const SizedBox(height: 16),
             Wrap(
               spacing: 6,
@@ -422,8 +457,8 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
                       // a wrong note is named, never given cents; its expected note counts as missed
                       child: Text(
                           g.isWrong
-                              ? 'played ${g.wrongName}, expected ${g.expected.name}\n${where(g.expected)}'
-                              : '${g.expected.name}\n${cents(g.cents)}\n${where(g.expected)}${hint(g)}',
+                              ? ['played ${g.wrongName}, expected ${g.expected.name}', where(g.expected)].where((l) => l.isNotEmpty).join('\n')
+                              : [g.expected.name, cents(g.cents), where(g.expected), hint(g)].where((l) => l.isNotEmpty).join('\n'),
                           textAlign: TextAlign.center,
                           style: const TextStyle(fontSize: 12)),
                     ),
@@ -436,7 +471,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
                   child: Text('${r.extras.length} extra notes: ${r.extras.take(8).map(_playedName).join(', ')}${r.extras.length > 8 ? ', ...' : ''}')),
             if (_savePrompt) ...[
               const SizedBox(height: 16),
-              const Text('Most notes were missed or wrong. Save this run?'),
+              Text(r.badRun ? 'Most notes were missed or wrong. Save this run?' : 'Save this run?'),
               const SizedBox(height: 8),
               // the default is No: it comes first and a run left unanswered is not saved
               AppButton(label: "Don't save", onTap: () => _answerSave(false)),
@@ -455,7 +490,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
                   : AppButton(label: 'Play the run', onTap: () => _playRun(r)),
             ],
             const SizedBox(height: 20),
-            AppButton(label: 'Play again', onTap: () => _start(r.scale)),
+            AppButton(label: 'Play again', onTap: () => _start(r.scale.octaveShift != 0 ? _scale! : r.scale)),
             const SizedBox(height: 12),
             AppButton(
                 label: 'Scales',
