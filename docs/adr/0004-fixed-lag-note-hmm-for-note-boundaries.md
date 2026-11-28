@@ -254,3 +254,31 @@ Kelechi accepted the 12-frame transient-dwell rule on 2026-11-22 on two conditio
 
 1. **A test that a real 80 to 90 ms note inside a fast run survives.** Added (`ARealNoteOf80To90MsInsideAFastRunSurvivesTheGlitchRule`, 108 cases: middle note 80, 85 and 90 ms between 140 ms notes, three step patterns, vibrato 0 and +-25 cents, with and without 2 octave-error frames at its head): passes. A fourth step pattern (-200, -300, -150, -200 cents with vibrato) loses the note in 4 of 36 cases. Switching the rule off does not fix them (it fixes none of the four and loses 73 of 144 in all), so I do not think the rule causes them; the likely cause is the HMM limit at a 150-cent neighbour on a note under the 100 ms gate. That is not isolated. The cases are kept as a disabled test (`DISABLED_ShortNoteNextToA150CentStepWithVibratoKnownLimit`) that has to pass before Phase 3 closes. 75 tests pass, 1 disabled.
 2. **Revisit when ADR 0007 lands.** The rule exists because YIN's octave errors reach the Viterbi path as a dwell of a few frames. If ADR 0007's multi-candidate tracking removes those errors upstream, the rule may be unnecessary and should then be removed or re-justified with evidence (ADR 0007 carries the same item).
+
+## Amendment 5 (Kelechi, 2026-11-28): the 80 to 90 ms note next to a 150-cent step stays a documented free-mode limit
+
+Condition 1 above asked for `DISABLED_ShortNoteNextToA150CentStepWithVibratoKnownLimit` to pass before Phase 3 closes. Kelechi re-scoped
+it on 2026-11-28, with no DSP change:
+
+- **Scale mode meets the requirement.** The same cases pass there: `ShortNoteNextToA150CentStepWithVibratoInScaleMode`, 36 of 36,
+  using ADR 0014's score-informed segmentation.
+  - On the sealed set p3gate, recall on 100 to 250 ms notes next to a 100 to 150 cent step was 1.0000, on 1087 notes
+    (`tools/accuracy/reports/phase3/sealed_p3.md`).
+- **In free mode it is a documented limit.** Free mode has no score to lean on. With steps of −200, −300, −150 and −200 cents and
+  vibrato of ±25 cents, 4 of the 36 cases lose the 80 to 90 ms note. That note is below the 100 ms gate, next to a 150-cent neighbour.
+  - The free-mode test stays disabled, as the record of that limit. Its comment points here.
+  - Free mode stays byte-identical to `phase1-complete` (golden manifest).
+- **Condition 2 (revisit the 12-frame rule after ADR 0007) stays open** until ADR 0007 is implemented (Kelechi, 2026-11-28).
+- **The other Phase 3 known limit, 60 to 80 cent steps (the section above), measured on dev seeds only (2026-11-28).** The sealed set
+  p3gate covered steps of 100 to 150 cents, not this case. Setup: dev seeds 9501 to 9516, `build_short_run_set(seed,
+  min_step_c=60)`, notes of 100 to 250 ms, the frozen binary `fc29130`.
+
+  | Smaller neighbour step | Notes | Free mode | Scale mode |
+  |---|---|---|---|
+  | 60 to 80 cents | 250 | 0.824 | **0.996** |
+  | 80 to 100 cents | 320 | 0.850 | **1.000** |
+  | 100 to 150 cents | 471 | 0.955 | **1.000** |
+
+  - Scale mode closes this case in practice.
+  - In free mode it stays a documented limit, like the one above.
+  - No sealed gate was registered for it. If Kelechi wants a hard number here, it needs its own pre-registered set.

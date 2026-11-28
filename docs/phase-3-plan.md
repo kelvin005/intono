@@ -4,7 +4,7 @@ Phase 3 is scale mode for v1 (ADR 0011), within the v1 scope of ADR 0012: no acc
 replay in RAM (ADR 0013), score-informed segmentation (ADR 0014, with Amendment 1), the local practice database (ADR 0015).
 Architecture: `docs/architecture.md`; its Backend, Sync, remote-config and subscription sections are outdated for v1 (ADR 0012).
 
-## Status (2026-11-27)
+## Status (2026-11-28)
 
 | Item | State |
 |---|---|
@@ -12,26 +12,22 @@ Architecture: `docs/architecture.md`; its Backend, Sync, remote-config and subsc
 | 2. Scale grader | **merged** (#30). Min note 80 ms; score (🟢 + 0.5·🟡)/n |
 | 3. Score-informed segmentation (hard gate) | **merged** (#34). Sealed **p3gate passed** (G-P3 1.0000) and **p3dev passed** (0 of 1024 invented, recall 1.0000), one run each (#36, #38) |
 | 4. Scale screen | **merged** (#33) |
-| 5. Finger/string results stored locally (drift) | **in progress**: ADR 0015 accepted (#35); implementation next |
-| Replay of own audio (RAM, 60 s) | ADR 0013 accepted; implemented with the review screen, after item 5 |
+| 5. Finger/string results stored locally (drift) | **merged** (#41): every graded note, the totals as caches, Clear history, the database in Android/iOS backup. On-device test on the emulator and the Simulator. SQLite pinned by version and hash (#43, ADR 0015 Note 1) |
+| App uses scale mode | **merged** (#40): the scale screen gives the engine the expected sequence |
+| Replay of own audio (RAM, 60 s) | ADR 0013 accepted; **next**, with the review screen |
 
 ## Open before Phase 3 closes
 
 Phase 3 closes only when both of these are done, as the p3gate pre-registration requires ("Also required").
 
-### A. The free-mode known-limit test (ADR 0004)
+### A. The free-mode known-limit test (ADR 0004): **done** (Kelechi, 2026-11-28)
 
-- **Test:** `DISABLED_ShortNoteNextToA150CentStepWithVibratoKnownLimit` in `dsp/tests/test_notes.cpp`.
-- **Today:** it still fails in free mode, as designed. Scale mode solves the same case: `ShortNoteNextToA150CentStepWithVibratoInScaleMode`,
-  36 of 36.
-- **Done means:** the test is enabled and passes, or Kelechi re-scopes the requirement and that is recorded in ADR 0004.
-- **Decision needed (Kelechi):** which of these?
-  - **(a) Fix free mode.** Make free mode pass the case. Under the DSP freeze this needs a real-audio result or a CI failure that
-    motivates it, an ADR, and golden free-mode identity would end by design, so it needs a new golden tag.
-  - **(b) Re-scope the requirement.** Accept the scale-mode test as meeting it, and keep the free-mode test disabled as a documented
-    limit of free mode, which has no score to lean on.
+- **Decision:** the scale-mode test (`ShortNoteNextToA150CentStepWithVibratoInScaleMode`, 36 of 36) meets the requirement. The free-mode
+  case stays a documented limit in ADR 0004, Amendment 5: no DSP change, and the test stays disabled as its record.
+- **The 60 to 80 cent known limit:** on dev seeds only, scale mode gives 0.996 against 0.824 in free mode (ADR 0004, Amendment 5).
+  No sealed gate was registered for it.
 
-### B. Revisit the ADR 0004 glitch rule after ADR 0007
+### B. Revisit the ADR 0004 glitch rule after ADR 0007: **open until ADR 0007 is implemented** (Kelechi, 2026-11-28)
 
 - **The rule:** short off-pitch runs are folded into the surrounding note. ADR 0007 (octave errors on weak fundamentals) changed what the
   tracker sees, so the rule's thresholds were tuned on inputs that no longer occur.
@@ -41,6 +37,12 @@ Phase 3 closes only when both of these are done, as the p3gate pre-registration 
   - Any change follows the DSP freeze (an ADR, motivated by a real-audio result or a CI failure) and passes the golden check, or comes
     with a new golden tag if it changes free mode.
   - Gate results are re-checked on dev seeds; the spent sealed sets are never re-run.
+
+## Known CI issue (kept as is, Kelechi 2026-11-28)
+
+The on-device database test on the iOS Simulator hangs on its first attempt after a fresh build, right after "Xcode build done". #42
+handles it: a fresh boot, a 10-minute limit per attempt, one retry, a step limit. The retry passes in about 1.5 minutes. Each iOS run
+loses about 10 minutes. The cause (install, launch or VM-service connection) is not being chased now.
 
 ## Decisions (Kelechi)
 
