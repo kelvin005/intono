@@ -32,6 +32,10 @@ int intono_ios_replay_play(intono_ios_session* s, double from_s, double to_s);
 void intono_ios_replay_stop(intono_ios_session* s);
 void intono_ios_replay_release(intono_ios_session* s);
 int intono_ios_replay_playing(const intono_ios_session* s);
+// Freeze stops the session's engine (the microphone is off during review) and plays through an output-only engine; release stops it.
+// For tests and the info text: 1 while the input (session) engine / the review output engine runs.
+int intono_ios_input_running(const intono_ios_session* s);
+int intono_ios_review_output_running(const intono_ios_session* s);
 // Text into out (always terminated, truncated if needed); returns the full length.
 int intono_ios_info(intono_ios_session* s, char* out, int cap);
 int intono_ios_soak_status(intono_ios_session* s, char* out, int cap);

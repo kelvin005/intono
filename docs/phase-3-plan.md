@@ -19,7 +19,8 @@ Architecture: `docs/architecture.md`; its Backend, Sync, remote-config and subsc
 | Coaching tips in words (rule-based templates) | next |
 | Spoken summary after a run (on-device TTS, microphone paused) | after the tips |
 | App uses scale mode | **merged** (#40): the scale screen gives the engine the expected sequence |
-| Replay of own audio (RAM, 60 s) | **merged** (#45): tap a note or "Play the run" on the review screen. Zeroed and released on leaving, Play again, background, close. Android stops the microphone during review; on iOS it stays on, discarding every sample (ADR 0013 note). **Needs Kelechi's phone check** |
+| Replay of own audio (RAM, 60 s) | **merged** (#45): tap a note or "Play the run" on the review screen. Zeroed and released on leaving, Play again, background, close. Android stops the microphone during review. **Needs Kelechi's phone check** |
+| iOS: microphone off during review | **#46**: an output-only engine for the review. **Required before TestFlight** (Kelechi, 2026-11-28) |
 
 ## Open before Phase 3 closes
 
