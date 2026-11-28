@@ -312,6 +312,46 @@ TEST(NoteTracker, ScaleModeKeepsEveryOtherFastRunCase) {
   EXPECT_EQ(bad, 0) << bad << " of " << total;
 }
 
+// ADR 0018: semitone steps of 60 to 80 cents in scale mode (notes played 20 to 40 cents flat or sharp, so neighbouring notes overlap the
+// +-50 cent zones of the decoder's semitone states). Five legato notes 69 68 69 68 69 (a trill-like shape, the worst case: every step is
+// narrow) at levels 8 -63 9 -62 10 cents re A4 (the 68s are 37 cents sharp, steps of 70 to 72 cents), middle notes 100 to 200 ms.
+// Returns the number of cases (durations x vibrato phases) in which a note is missing, invented, or its boundary is more than 25 ms off.
+static int narrow_trill(double vib, int* total, bool report) {
+  int bad = 0;
+  *total = 0;
+  const double durs[][3] = {{140, 140, 140}, {100, 120, 100}, {200, 150, 200}, {120, 180, 110}};
+  const std::vector<double> lv{8, -63, 9, -62, 10};
+  for (const auto& dd : durs)
+    for (int ph = 0; ph < 4; ++ph) {
+      std::vector<double> ms{300, dd[0], dd[1], dd[2], 300}, truth;
+      const auto n = run_case(ms, lv, vib, ph * 1.57, -1, 0, truth, true);
+      ++*total;
+      double worst = 0;
+      if (n.size() == 5u)
+        for (size_t i = 1; i < 5; ++i) worst = std::max(worst, 1000.0 * std::fabs(n[i].t_start - truth[i - 1]));
+      if (n.size() != 5u || worst > 25.0) {
+        ++bad;
+        if (report) ADD_FAILURE() << "durations " << dd[0] << "," << dd[1] << "," << dd[2] << " vibrato " << vib << " phase " << ph << ": "
+                      << n.size() << " notes, worst boundary error " << worst << " ms";
+      }
+    }
+  return bad;
+}
+
+TEST(NoteTracker, ScaleModeSeparatesSemitoneNotesPlayed20To40CentsOff) {
+  int total = 0;
+  EXPECT_EQ(narrow_trill(0.0, &total, true), 0) << "without vibrato, " << total << " cases";
+}
+
+// With vibrato of +-12 cents on every note of the trill (phase-locked at 5.5 Hz, worst case) 7 of 16 cases still fail on 2026-11-28
+// (12 of 16 with the old +-50 tolerance); the dev sets, with vibrato on half of the notes at random phases, measure the real rate. This pins the
+// improvement; a lower count is welcome and the bound is lowered then.
+TEST(NoteTracker, ScaleModeNarrowTrillWithVibratoStaysUnderTheMeasuredFailures) {
+  int total = 0;
+  const int bad = narrow_trill(12.0, &total, false);
+  EXPECT_LE(bad, 7) << bad << " of " << total;
+}
+
 TEST(NoteTracker, ScaleModeDoesNotInventTheExpectedNoteWhenItIsNotPlayed) {
   // Expected A4 G4 E4; the player holds A4 and goes straight to E4 (skips G4), with and without vibrato and at several speeds.
   for (double vib : {0.0, 25.0})
@@ -495,6 +535,38 @@ TEST(EngineNotes, ThreeNotePhraseWithLegatoStepAndBowGap) {
   EXPECT_LT(notes[1].t_start, 0.25 + 0.5 + 0.03);
   EXPECT_GT(notes[2].t_start - notes[1].t_end, 0.1);    // the bow gap is outside both notes
   for (size_t i = 1; i < notes.size(); ++i) EXPECT_GE(notes[i].t_start, notes[i - 1].t_end);
+}
+
+// ADR 0018: in scale mode a note whose mean lies within 60 cents of a note that is due is that note, even when another semitone is nearer
+// (a note 36 cents sharp with vibrato has a mean that wanders past the +-50 cent boundary). Free mode keeps the nearest target.
+TEST(EngineNotes, ScaleModeLabelsANoteWithinSixtyCentsAsTheDueNote) {
+  struct Case { double cents; int expect_free, expect_scale; double cents_scale; };
+  const Case cases[] = {{55.0, 70, 69, 55.0}, {-58.0, 68, 69, -58.0}, {65.0, 70, 70, -35.0}, {20.0, 69, 69, 20.0}};
+  for (const Case& cs : cases)
+    for (bool scale : {false, true}) {
+      const auto tone = testutil::harmonic(48000, 440.0 * std::exp2(cs.cents / 1200), 0.6);
+      std::vector<float> x(9600, 0.f);
+      x.insert(x.end(), tone.begin(), tone.end());
+      x.resize(x.size() + 12000, 0.f);
+      const intono_config conf = cfg48();
+      intono_engine* e = testutil::make_engine(&conf);
+      const int expected[2] = {69, 71};
+      if (scale) intono_set_expected(e, expected, 2);
+      std::vector<intono_note> all, buf(16);
+      std::vector<intono_frame> fb(64);
+      for (size_t p = 0; p < x.size(); p += 128) {
+        intono_process(e, x.data() + p, static_cast<int>(std::min<size_t>(128, x.size() - p)));
+        while (intono_read_frames(e, fb.data(), 64) > 0) {}
+        int n;
+        while ((n = testutil::read_notes(e, buf.data(), 16)) > 0) all.insert(all.end(), buf.begin(), buf.begin() + n);
+      }
+      intono_destroy(e);
+      ASSERT_EQ(all.size(), 1u) << cs.cents << (scale ? " scale" : " free");
+      EXPECT_EQ(all[0].midi_note, scale ? cs.expect_scale : cs.expect_free) << cs.cents << (scale ? " scale" : " free");
+      if (scale) {
+        EXPECT_NEAR(all[0].mean_cents, cs.cents_scale, 3.0) << cs.cents;
+      }
+    }
 }
 
 TEST(EngineNotes, VibratoNoteMeanIsTheCentreAndRateAndWidthAreReported) {

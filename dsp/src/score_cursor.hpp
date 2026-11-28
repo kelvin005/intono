@@ -10,6 +10,9 @@
 
 namespace intono {
 
+// ADR 0018: in scale mode a note whose mean is within this many cents (re the tuning's own target) of a due note is labelled as that note.
+constexpr double kScaleLabelWindow = 60.0;
+
 class ScoreCursor {
  public:
   static constexpr int kMax = 128;
@@ -29,6 +32,9 @@ class ScoreCursor {
   int k() const { return k_; }
   int misses() const { return misses_; }
   int size() const { return n_; }
+
+  // The i-th note due from the cursor on (0 = expected[k]); -1 if none or free mode (plain).
+  int due(int i) const { return biased_ && k_ + i < n_ ? seq_[k_ + i] : -1; }
 
   void on_note(int midi) {
     if (n_ == 0) return;

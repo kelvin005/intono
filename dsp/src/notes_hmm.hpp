@@ -41,6 +41,11 @@ constexpr double kHmmTolerance = 50.0, kHmmSigma = 25.0, kHmmSwitch = 24.0;
 // 8 is the weakest bias of that plateau. tools/accuracy/reports/phase3/score_informed_dev.md.
 constexpr double kHmmSwitchExpected = 8.0;
 constexpr int kHmmMaxBias = 4;
+// Scale mode (ADR 0018): the cost-free zone of a semitone state is +-30 cents instead of +-50 while the decoder has steps to follow.
+// With notes played 20 to 40 cents off their semitone the neighbouring +-50 zones overlap and a note 13 cents outside the old zone cost
+// almost nothing there, so the path never switched (dev seeds 9561-9576, 60-80 cent steps: recall 0.891). 20, 30 and 40 gave 0.982, 0.982
+// and 0.968; 30 is the weakest change of that plateau. Chosen on dev seeds only, never on the sealed sets.
+constexpr double kHmmScaleTolerance = 30.0;
 
 // change-point fit
 constexpr int kFitOmegas = 12;       // vibrato rates 3.5, 4.0 ... 9.0 Hz
@@ -143,9 +148,10 @@ class NoteTracker {
 
   void forward(double c) {
     double e[kHmmStates];
+    const double tol = nb_ > 0 ? kHmmScaleTolerance : kHmmTolerance;   // free mode (nb_ == 0): unchanged
     for (int s = 0; s < kHmmStates; ++s) {
       const double centre = 100.0 * (kHmmMidiLo + s - 69);
-      e[s] = std::max(0.0, std::fabs(c - centre) - kHmmTolerance) / kHmmSigma;
+      e[s] = std::max(0.0, std::fabs(c - centre) - tol) / kHmmSigma;
     }
     const int t = n_ & (kHmmRing - 1);
     if (n_ == 0) {

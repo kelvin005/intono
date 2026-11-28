@@ -51,4 +51,34 @@ inline Target nearest_target(double hz, Tuning t, double a4, int tonic_midi) {
   return out;
 }
 
+// The target of a given ET note number (the tuning's own pitch for that note), or hz == 0 if the tuning has none for it. Used in scale
+// mode, where the expected note is known (ADR 0018).
+inline Target target_for_midi(double hz, Tuning t, double a4, int tonic_midi, int midi) {
+  Target out;
+  if (!(hz > 0.0)) return out;
+  if (t == Tuning::Equal) {
+    out.midi_note = midi;
+    out.hz = midi_to_hz(midi, a4);
+    out.cents = cents_between(hz, out.hz);
+    return out;
+  }
+  const double* ratios = (t == Tuning::Just) ? kJust : kPythag;
+  const double f_tonic = midi_to_hz(tonic_midi, a4);
+  const int oct0 = static_cast<int>(std::floor(std::log2(hz / f_tonic)));
+  double best = 1e30;
+  for (int o = oct0 - 2; o <= oct0 + 2; ++o)
+    for (int k = 0; k < 12; ++k) {
+      const double f = f_tonic * ratios[k] * std::exp2(o);
+      if (static_cast<int>(std::lround(69.0 + 12.0 * std::log2(f / a4))) != midi) continue;
+      const double c = cents_between(hz, f);
+      if (std::fabs(c) < std::fabs(best)) {
+        best = c;
+        out.hz = f;
+        out.cents = c;
+      }
+    }
+  out.midi_note = midi;
+  return out;
+}
+
 }  // namespace intono

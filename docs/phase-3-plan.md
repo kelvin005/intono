@@ -14,7 +14,7 @@ Architecture: `docs/architecture.md`; its Backend, Sync, remote-config and subsc
 | 4. Scale screen | **merged** (#33) |
 | 5. Finger/string results stored locally (drift) | **merged** (#41): every graded note, the totals as caches, Clear history, the database in Android/iOS backup. On-device test on the emulator and the Simulator. SQLite pinned by version and hash (#43, ADR 0015 Note 1) |
 | iOS: microphone off during review | **#46**: an output-only engine for the review. **Required before TestFlight** (Kelechi, 2026-11-28) |
-| Sealed set for 60 to 80 cent steps (semitones 20 to 40¢ off), recall ≥ 0.99, invented ≤ 0.5 % | **Not registered.** On dev seeds the current engine gets 0.891 and 1.93 % (`tools/accuracy/reports/phase3/semitone_dev.md`); passing needs a scale-mode decoder change under the DSP freeze. **Waiting on Kelechi's decision** |
+| Narrow-step gates (Kelechi, 2026-11-28): (a) realistic scales, every note detuned 0 to 40¢, recall ≥ 0.99 and invented ≤ 0.5 %; (b) stress, every step 60 to 80¢, recall ≥ 0.97 | **Decoder change proposed (ADR 0018, DSP-freeze exception authorised), both sets pre-registered** (`docs/adr/sealed-p3semi-preregistration.md`; seeds 34601-34616 and 34501-34516). Dev: (a) 0.9979 / 0.15 %, (b) 0.9817 / 0.56 % (before: 0.9955 / 0.33 %, 0.891 / 1.93 %). Next: Kelechi's "merge", frozen binary from the merge, addendum, one run of each |
 | Finger/string heatmap screen (from `graded_notes`, last 30 days) | **#47** |
 | Coaching tips in words (rule-based templates) | **#49**: ADR 0016 proposed (thresholds and rules); **needs Kelechi's "merge"** |
 | Spoken summary after a run (on-device TTS, microphone paused) | **#50**: ADR 0017 proposed; **needs Kelechi's "merge"**. Built on #49 |
