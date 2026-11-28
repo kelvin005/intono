@@ -63,6 +63,11 @@ class _IntonoAppState extends State<IntonoApp> {
         await store.close();
         return;
       }
+      try {
+        await store.applyTrustedNotesRules(_grading); // once: history from before wrong notes existed must not keep producing tips
+      } catch (_) {
+        // the history stays as it was; the next launch tries again
+      }
       final mode = SpokenMode.parse(await store.setting(SpokenMode.settingKey));
       if (!mounted) return;
       setState(() {
@@ -113,7 +118,7 @@ class _IntonoAppState extends State<IntonoApp> {
                 load: () async {
                   final store = _store;
                   if (store == null) throw StateError('the practice history is not open');
-                  return heatmapOf(await store.gradedNotesSince(DateTime.now().toUtc().subtract(const Duration(days: 30))));
+                  return heatmapOf(await store.gradedNotesSince(DateTime.now().toUtc().subtract(const Duration(days: 30)), trustedWithin: _grading.labelWindowCents));
                 },
                 config: _grading,
                 onClose: () => setState(() => _heatmap = false),
@@ -145,7 +150,7 @@ class _IntonoAppState extends State<IntonoApp> {
                   final store = _store;
                   final history = store == null
                       ? [for (final n in storedNotesOf(r)) ('this run', n)]
-                      : await store.gradedNotesSince(DateTime.now().toUtc().subtract(const Duration(days: 30)));
+                      : await store.gradedNotesSince(DateTime.now().toUtc().subtract(const Duration(days: 30)), trustedWithin: _grading.labelWindowCents);
                   return coachingTips(history: history, run: r, library: _library!, grading: _grading, config: _coaching);
                 },
                 onRunFinished: (r, started, ended) async {

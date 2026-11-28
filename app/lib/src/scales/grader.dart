@@ -7,7 +7,7 @@ import 'scale.dart';
 enum Grade { green, yellow, red, missed }
 
 class GradedNote {
-  const GradedNote({required this.index, required this.expected, required this.grade, this.played, this.cents});
+  const GradedNote({required this.index, required this.expected, required this.grade, this.played, this.cents, this.wrong});
 
   /// Position in the scale (0 = the first note).
   final int index;
@@ -17,8 +17,20 @@ class GradedNote {
   /// The played note aligned to it (after merging splits); null if missed.
   final Note? played;
 
-  /// Cents from the expected note's target in the engine's tuning; null if missed.
+  /// Cents from the expected note's target in the engine's tuning; null if missed or wrong.
   final double? cents;
+
+  /// A wrong note: a note was played in this note's place but is further than the label window from it. The expected note is then
+  /// graded [Grade.missed] and [played] and [cents] are null; this is what was played instead (never graded, never given cents).
+  final Note? wrong;
+
+  bool get isWrong => wrong != null;
+
+  /// The note that was heard in this note's place, right or wrong; null if nothing.
+  Note? get heard => played ?? wrong;
+
+  /// The pitch name of the wrong note, e.g. "E4" (its nearest semitone).
+  String? get wrongName => wrong == null ? null : noteName((wrong!.midiNote + wrong!.meanCents / 100).round());
 }
 
 /// The nearest-semitone hint for a far-off note (ADR 0018 note): [midi] is the neighbour on the side the note is off, [closer] is true
@@ -50,6 +62,10 @@ class ScaleResult {
     required this.red,
     required this.missed,
     required this.scorePercent,
+    this.wrong = 0,
+    this.heard = 0,
+    this.notHeard = false,
+    this.badRun = false,
   });
 
   final ScaleDef scale;
@@ -61,6 +77,16 @@ class ScaleResult {
   final List<Note> extras;
   final int green, yellow, red, missed;
 
+  /// Wrong notes (counted in [missed] too: the expected note was not played), and how many notes were heard at all (played, wrong or
+  /// stray: after merging splits and dropping notes shorter than the minimum).
+  final int wrong, heard;
+
+  /// Fewer than [GradingConfig.minHeardFraction] of the expected notes were heard: nothing is graded, shown as a grade, saved or coached.
+  final bool notHeard;
+
+  /// More than [GradingConfig.badRunFraction] of the expected notes were missed or wrong: shown, but saved only if the player says so.
+  final bool badRun;
+
   /// (🟢 + 0.5 × 🟡) / expected notes × 100; missed notes count as 🔴 (Kelechi, 2026-11-27).
   final double scorePercent;
 }
@@ -70,7 +96,7 @@ class ScaleResult {
 double centsToExpected(Note n, int expectedMidi) => (n.midiNote - expectedMidi) * 100.0 + n.meanCents;
 
 /// Grades a played scale against its definition: merge same-pitch splits, drop notes shorter than [GradingConfig.minNoteMs], align
-/// with a semi-global edit distance (a match within 50 cents costs 0; a wrong note, a missed note and an extra note cost 1 each; the
+/// with a semi-global edit distance (a match within the label window, 60 cents, costs 0; a wrong note, a missed note and an extra note cost 1 each; the
 /// unplayed rest of the scale is free), then grade. Works on a finished run and on a run still being played.
 ScaleResult gradeScale(ScaleDef scale, List<Note> played, GradingConfig cfg) {
   final ordered = [...played]..sort((a, b) => a.tStart.compareTo(b.tStart));
@@ -85,7 +111,7 @@ ScaleResult gradeScale(ScaleDef scale, List<Note> played, GradingConfig cfg) {
   // speech blip) stays an extra there. In the middle of a run nothing changes: a wrong note (about 1) always beats extra + missed (2).
   double sub(int i, int j) {
     final d = centsToExpected(notes[j], exp[i].midi).abs();
-    if (d <= 50) return d / 1e6;
+    if (d <= cfg.labelWindowCents) return d / 1e6;
     if (d <= 300) return 1 - 1e-3 + d / 1e6;
     return 1 + d / 1e6;
   }
@@ -131,7 +157,7 @@ ScaleResult gradeScale(ScaleDef scale, List<Note> played, GradingConfig cfg) {
     }
   }
 
-  var green = 0, yellow = 0, red = 0, missed = 0;
+  var green = 0, yellow = 0, red = 0, missed = 0, wrong = 0;
   final graded = <GradedNote>[];
   for (var k = 0; k < n; k++) {
     final mj = matchOf[k];
@@ -141,6 +167,13 @@ ScaleResult gradeScale(ScaleDef scale, List<Note> played, GradingConfig cfg) {
       continue;
     }
     final c = centsToExpected(notes[mj], exp[k].midi);
+    if (c.abs() > cfg.labelWindowCents) {
+      // a wrong note: never graded as the expected note and never given cents (a +1029¢ reading is a different note, not an error)
+      missed++;
+      wrong++;
+      graded.add(GradedNote(index: k, expected: exp[k], grade: Grade.missed, wrong: notes[mj]));
+      continue;
+    }
     final g = c.abs() <= cfg.greenCents
         ? Grade.green
         : c.abs() <= cfg.yellowCents
@@ -157,6 +190,9 @@ ScaleResult gradeScale(ScaleDef scale, List<Note> played, GradingConfig cfg) {
     graded.add(GradedNote(index: k, expected: exp[k], grade: g, played: notes[mj], cents: c));
   }
   final score = n == 0 ? 0.0 : 100.0 * (green + 0.5 * yellow) / n;
+  // heard: the played notes that count (merged, long enough): wrong or stray ones too, since something was played; silence is not
+  final heard = notes.length;
+  final notHeard = n > 0 && heard < cfg.minHeardFraction * n;
   return ScaleResult(
     scale: scale,
     notes: graded,
@@ -166,6 +202,10 @@ ScaleResult gradeScale(ScaleDef scale, List<Note> played, GradingConfig cfg) {
     red: red,
     missed: missed,
     scorePercent: score,
+    wrong: wrong,
+    heard: heard,
+    notHeard: notHeard,
+    badRun: !notHeard && n > 0 && missed > cfg.badRunFraction * n,
   );
 }
 

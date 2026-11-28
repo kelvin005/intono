@@ -21,19 +21,20 @@ class ScaleRun {
   }
 
   /// The grade of the most recently played note that took a place in the scale; null before the first. A far stray note (an extra)
-  /// does not change it; a near wrong note (within 3 semitones of the note due) takes that note's place and shows red at once.
+  /// does not change it; a wrong note (it took the place of the note due) shows red at once.
   Grade? get latestGrade {
     final r = _graded;
     if (r == null) return null;
     GradedNote? latest;
     for (final g in r.notes) {
-      if (g.played != null && (latest == null || g.played!.tStart > latest.played!.tStart)) latest = g;
+      if (g.heard != null && (latest == null || g.heard!.tStart > latest.heard!.tStart)) latest = g;
     }
-    return latest?.grade;
+    if (latest == null) return null;
+    return latest.isWrong ? Grade.red : latest.grade;
   }
 
   /// True once the last note of the scale (the low tonic after the descent) has been played.
-  bool get complete => _graded != null && _graded!.notes.last.played != null;
+  bool get complete => _graded != null && _graded!.notes.last.heard != null;
 
   ScaleResult result() => _graded ?? gradeScale(scale, const [], config);
 }

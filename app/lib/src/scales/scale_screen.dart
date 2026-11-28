@@ -7,6 +7,7 @@ import '../audio_control.dart';
 import '../debug_screen.dart' show Disposable, EngineFactory;
 import '../engine_api.dart';
 import '../frame_poller.dart';
+import '../meter_state.dart' show noteName;
 import '../speech.dart';
 import '../ui_button.dart';
 import 'grader.dart';
@@ -84,6 +85,9 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
   bool _speaking = false;
   bool _starting = false;
   DateTime _runStarted = DateTime.now();
+  DateTime _runEnded = DateTime.now();
+  bool _savePrompt = false; // a bad run (most notes missed or wrong): ask before it enters the history
+  bool _declined = false;
   // Replay (ADR 0013): armed with each run; during review the session stays open (input paused) for playback.
   bool _replayArmed = false;
   bool _reviewOpen = false;   // the audio session is still open for the review
@@ -162,6 +166,8 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
       _result = null;
       _saveError = '';
       _tips = const [];
+      _savePrompt = false;
+      _declined = false;
       _runStarted = DateTime.now();
       _phase = _Phase.run;
     });
@@ -225,13 +231,28 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
 
   void _finish({bool keepReplay = true}) {
     if (_phase != _Phase.run) return;
-    _stopCapture(keepReplay: keepReplay);
     final result = _run!.result();
+    _stopCapture(keepReplay: keepReplay && !result.notHeard); // nothing heard: nothing to replay
+    final ended = DateTime.now();
     setState(() {
       _result = result;
+      _runEnded = ended;
+      _savePrompt = result.badRun;
+      _declined = false;
       _phase = _Phase.results;
     });
-    _save(result, _runStarted, DateTime.now());
+    // "I didn't hear you play": no grade, no save, no tips, no heatmap. A bad run waits for the player's answer to "Save this run?".
+    if (!result.notHeard && !result.badRun) _save(result, _runStarted, ended);
+  }
+
+  void _answerSave(bool yes) {
+    final r = _result;
+    if (r == null || !_savePrompt) return;
+    setState(() {
+      _savePrompt = false;
+      _declined = !yes;
+    });
+    if (yes) _save(r, _runStarted, _runEnded);
   }
 
   Future<void> _save(ScaleResult r, DateTime started, DateTime ended) async {
@@ -325,7 +346,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
             children: [
               Text(_scale!.title, style: const TextStyle(fontSize: 20)),
               const SizedBox(height: 6),
-              Text('${run.result().notes.where((g) => g.played != null).length} of ${_scale!.notes.length} notes'),
+              Text('${run.result().notes.where((g) => g.heard != null).length} of ${_scale!.notes.length} notes'),
               const Spacer(),
               AppButton(label: 'Stop', onTap: _finish),
             ],
@@ -336,15 +357,37 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
   }
 
   void _playRun(ScaleResult r) {
-    final played = [for (final g in r.notes) if (g.played != null) g.played!];
+    final played = [for (final g in r.notes) if (g.heard != null) g.heard!];
     if (played.isEmpty) return;
     final from = played.map((p) => p.tStart).reduce((a, b) => a < b ? a : b);
     final to = played.map((p) => p.tEnd).reduce((a, b) => a > b ? a : b);
     _play(from - 0.2, to + 0.3);
   }
 
+  static String _playedName(Note n) => noteName((n.midiNote + n.meanCents / 100).round());
+
+  /// Nothing (or almost nothing) was heard: no grade, no save, no tips (GradingConfig.minHeardFraction).
+  Widget _notHeard(ScaleResult r) => ColoredBox(
+        color: ScaleColors.neutral,
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(20),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(r.scale.title, style: const TextStyle(fontSize: 20)),
+              const SizedBox(height: 16),
+              const Text("I didn't hear you play. Check the microphone, come closer, or play louder.", style: TextStyle(fontSize: 20)),
+              const SizedBox(height: 24),
+              AppButton(label: 'Play again', onTap: () => _start(r.scale)),
+              const SizedBox(height: 12),
+              AppButton(label: 'Scales', onTap: () => setState(() => _phase = _Phase.pick)),
+            ]),
+          ),
+        ),
+      );
+
   Widget _results() {
     final r = _result!;
+    if (r.notHeard) return _notHeard(r);
     String cents(double? c) => c == null ? 'missed' : '${c >= 0 ? '+' : ''}${c.toStringAsFixed(0)}¢';
     String where(ScaleNote n) =>
         '${n.string} ${n.finger == 0 ? 'open' : '${n.finger}${n.placement == null ? '' : ' ${n.placement}'}'}';
@@ -372,20 +415,38 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
                   GestureDetector(
                     key: ValueKey('result-note:${g.index}'),
                     // ADR 0013: a played note replays its own slice, 50 ms either side
-                    onTap: g.played == null || !_reviewOpen ? null : () => _play(g.played!.tStart - 0.05, g.played!.tEnd + 0.05),
+                    onTap: g.heard == null || !_reviewOpen ? null : () => _play(g.heard!.tStart - 0.05, g.heard!.tEnd + 0.05),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                      color: ScaleColors.of(g.grade),
-                      child: Text('${g.expected.name}\n${cents(g.cents)}\n${where(g.expected)}${hint(g)}',
-                          textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
+                      color: ScaleColors.of(g.isWrong ? Grade.red : g.grade),
+                      // a wrong note is named, never given cents; its expected note counts as missed
+                      child: Text(
+                          g.isWrong
+                              ? 'played ${g.wrongName}, expected ${g.expected.name}\n${where(g.expected)}'
+                              : '${g.expected.name}\n${cents(g.cents)}\n${where(g.expected)}${hint(g)}',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 12)),
                     ),
                   ),
               ],
             ),
-            if (r.extras.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text('${r.extras.length} extra notes')),
+            if (r.extras.isNotEmpty)
+              Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text('${r.extras.length} extra notes: ${r.extras.take(8).map(_playedName).join(', ')}${r.extras.length > 8 ? ', ...' : ''}')),
+            if (_savePrompt) ...[
+              const SizedBox(height: 16),
+              const Text('Most notes were missed or wrong. Save this run?'),
+              const SizedBox(height: 8),
+              // the default is No: it comes first and a run left unanswered is not saved
+              AppButton(label: "Don't save", onTap: () => _answerSave(false)),
+              const SizedBox(height: 8),
+              AppButton(label: 'Save', onTap: () => _answerSave(true)),
+            ],
+            if (_declined) const Padding(padding: EdgeInsets.only(top: 12), child: Text('Not saved to your progress.')),
             if (_saveError.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_saveError)),
             for (final tip in _tips) Padding(padding: const EdgeInsets.only(top: 12), child: Text(tip)),
-            if (_reviewOpen && r.notes.any((g) => g.played != null)) ...[
+            if (_reviewOpen && r.notes.any((g) => g.heard != null)) ...[
               const SizedBox(height: 20),
               const Text('Tap a note to hear it.', style: TextStyle(fontSize: 13)),
               const SizedBox(height: 8),

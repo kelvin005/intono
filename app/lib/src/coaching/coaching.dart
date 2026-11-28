@@ -88,8 +88,10 @@ List<String> coachingTips({
       tips.add('Your ${_where(h)} is often $n¢ $dir. ${_exercise(h, run.scale, library)}');
     }
   }
-  if (tips.length < config.maxTips && run.missed >= config.missedTipMin) {
-    tips.add('${run.missed} notes were not heard. Play slower, with one clear bow per note.');
+  // wrong notes are not "not heard": a different note was played (and named on the results)
+  final notHeard = run.missed - run.wrong;
+  if (tips.length < config.maxTips && notHeard >= config.missedTipMin) {
+    tips.add('$notHeard notes were not heard. Play slower, with one clear bow per note.');
   }
   if (tips.isEmpty) tips.add('No habitual error yet. Play it again with the drone to keep it that way.');
   return tips;
@@ -98,7 +100,8 @@ List<String> coachingTips({
 List<_Habit> _habits(List<(String, StoredNote)> history, GradingConfig grading, CoachingConfig config) {
   final groups = <String, List<StoredNote>>{};
   for (final (_, n) in history) {
-    if (n.cents == null) continue;
+    // only notes graded within the label window (🟢/🟡/🔴 by cents): never missed, wrong or out-of-window ones (ADR 0016 status note)
+    if (n.cents == null || n.cents!.abs() > grading.labelWindowCents) continue;
     groups.putIfAbsent('${n.string}|${n.finger}|${n.placement ?? ''}', () => []).add(n);
   }
   final out = <_Habit>[];
