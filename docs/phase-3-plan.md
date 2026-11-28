@@ -13,6 +13,11 @@ Architecture: `docs/architecture.md`; its Backend, Sync, remote-config and subsc
 | 3. Score-informed segmentation (hard gate) | **merged** (#34). Sealed **p3gate passed** (G-P3 1.0000) and **p3dev passed** (0 of 1024 invented, recall 1.0000), one run each (#36, #38) |
 | 4. Scale screen | **merged** (#33) |
 | 5. Finger/string results stored locally (drift) | **merged** (#41): every graded note, the totals as caches, Clear history, the database in Android/iOS backup. On-device test on the emulator and the Simulator. SQLite pinned by version and hash (#43, ADR 0015 Note 1) |
+| iOS: microphone off during review | **#46**: an output-only engine for the review. **Required before TestFlight** (Kelechi, 2026-11-28) |
+| Sealed set for 60 to 80 cent steps (semitones 20 to 40¢ off), recall ≥ 0.99, invented ≤ 0.5 % | **Not registered.** On dev seeds the current engine gets 0.891 and 1.93 % (`tools/accuracy/reports/phase3/semitone_dev.md`); passing needs a scale-mode decoder change under the DSP freeze. **Waiting on Kelechi's decision** |
+| Finger/string heatmap screen (from `graded_notes`, last 30 days) | **#47** |
+| Coaching tips in words (rule-based templates) | next |
+| Spoken summary after a run (on-device TTS, microphone paused) | after the tips |
 | App uses scale mode | **merged** (#40): the scale screen gives the engine the expected sequence |
 | Replay of own audio (RAM, 60 s) | **merged** (#45): tap a note or "Play the run" on the review screen. Zeroed and released on leaving, Play again, background, close. Android stops the microphone during review; on iOS it stays on, discarding every sample (ADR 0013 note). **Needs Kelechi's phone check** |
 

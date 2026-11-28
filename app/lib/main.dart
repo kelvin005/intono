@@ -8,6 +8,8 @@ import 'src/bench_runner.dart';
 import 'src/bench_screen.dart';
 import 'src/db/practice_db_open.dart';
 import 'src/db/practice_store.dart';
+import 'src/heatmap/heatmap.dart';
+import 'src/heatmap/heatmap_screen.dart';
 import 'src/debug_screen.dart';
 import 'src/ffi/intono_bindings.dart';
 import 'src/ffi_engine.dart';
@@ -36,6 +38,7 @@ class _IntonoAppState extends State<IntonoApp> {
   bool _bench = false;
   bool _scales = false;
   bool _settings = false;
+  bool _heatmap = false;
   PracticeStore? _store; // the practice history (ADR 0015); null until opened, or if it cannot be opened
   ScaleLibrary? _library;
   GradingConfig _grading = const GradingConfig();
@@ -87,7 +90,17 @@ class _IntonoAppState extends State<IntonoApp> {
   @override
   Widget build(BuildContext context) => Directionality(
         textDirection: TextDirection.ltr,
-        child: _settings
+        child: _heatmap
+            ? HeatmapScreen(
+                load: () async {
+                  final store = _store;
+                  if (store == null) throw StateError('the practice history is not open');
+                  return heatmapOf(await store.gradedNotesSince(DateTime.now().toUtc().subtract(const Duration(days: 30))));
+                },
+                config: _grading,
+                onClose: () => setState(() => _heatmap = false),
+              )
+            : _settings
             ? SettingsScreen(
                 onClearHistory: () async {
                   final store = _store;
@@ -122,6 +135,7 @@ class _IntonoAppState extends State<IntonoApp> {
                 onOpenBench: () => setState(() => _bench = true),
                 onOpenScales: _library == null ? null : () => setState(() => _scales = true),
                 onOpenSettings: () => setState(() => _settings = true),
+                onOpenHeatmap: () => setState(() => _heatmap = true),
               ),
       );
 }
