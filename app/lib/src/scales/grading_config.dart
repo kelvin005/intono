@@ -3,7 +3,7 @@ import 'dart:convert';
 /// Scale grading thresholds (ADR 0011). In v1 they come from a file bundled with the app (assets/config/grading.json; no remote config,
 /// ADR 0012). The defaults here are the same values, so a missing or older file still grades the same way.
 class GradingConfig {
-  const GradingConfig({this.greenCents = 5, this.yellowCents = 15, this.minNoteMs = 80, this.mergeGapMs = 120, this.mergeMaxCentsDiff = 25});
+  const GradingConfig({this.greenCents = 5, this.yellowCents = 15, this.minNoteMs = 80, this.mergeGapMs = 120, this.mergeMaxCentsDiff = 25, this.neighbourCents = 40});
 
   /// |cents| at or below this: 🟢.
   final double greenCents;
@@ -21,6 +21,10 @@ class GradingConfig {
   /// ... and with mean pitches within this many cents of each other (pieces of one note have nearly the same pitch).
   final double mergeMaxCentsDiff;
 
+  /// ADR 0018 note: a note labelled as the expected note but more than this many cents from it also shows the nearest semitone
+  /// ("sounds closer to B"; Kelechi, 2026-11-28).
+  final double neighbourCents;
+
   static const supportedFormat = 1;
 
   factory GradingConfig.fromJsonString(String text) {
@@ -34,8 +38,9 @@ class GradingConfig {
       minNoteMs: v('min_note_ms', d.minNoteMs),
       mergeGapMs: v('merge_gap_ms', d.mergeGapMs),
       mergeMaxCentsDiff: v('merge_max_cents_diff', d.mergeMaxCentsDiff),
+      neighbourCents: v('neighbour_cents', d.neighbourCents),
     );
-    if (!(c.greenCents > 0 && c.yellowCents >= c.greenCents && c.minNoteMs >= 0 && c.mergeGapMs >= 0 && c.mergeMaxCentsDiff >= 0)) {
+    if (!(c.greenCents > 0 && c.yellowCents >= c.greenCents && c.minNoteMs >= 0 && c.mergeGapMs >= 0 && c.mergeMaxCentsDiff >= 0 && c.neighbourCents >= c.yellowCents)) {
       throw FormatException('inconsistent grading thresholds: $text');
     }
     return c;

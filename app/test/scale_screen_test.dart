@@ -244,4 +244,35 @@ void main() {
     expect(find.textContaining('no microphone permission'), findsOneWidget);
     expect(keyed('scale-tile'), findsWidgets);
   });
+
+  group('a note far from the expected one shows the nearest semitone (ADR 0018 note)', () {
+    Future<void> playAndStop(WidgetTester t, List<Note> notes) async {
+      await t.pumpWidget(screen());
+      await t.tap(find.text('G major, 1 octave'));
+      await t.pump();
+      await t.pump();
+      engine.queuedNotes.addAll(notes);
+      await t.pump(const Duration(milliseconds: 150));
+      await t.tap(find.text('Stop'));
+      await t.pump();
+    }
+
+    testWidgets('55 cents flat: "sounds closer to F#" in that note\'s result cell, and only there', (t) async {
+      await playAndStop(t, [n(55, -55, 0), n(57, 2, 0.5)]);
+      expect(find.text('G3\n-55¢\nG open\nsounds closer to F#'), findsOneWidget);
+      expect(find.textContaining('sounds closer to'), findsOneWidget);
+    });
+
+    testWidgets('45 cents sharp: "almost G#"', (t) async {
+      await playAndStop(t, [n(55, 45, 0), n(57, 2, 0.5)]);
+      expect(find.textContaining('almost G#'), findsOneWidget);
+      expect(find.textContaining('sounds closer to'), findsNothing);
+    });
+
+    testWidgets('30 cents off: no hint', (t) async {
+      await playAndStop(t, [n(55, 30, 0), n(57, 2, 0.5)]);
+      expect(find.textContaining('closer to'), findsNothing);
+      expect(find.textContaining('almost'), findsNothing);
+    });
+  });
 }

@@ -348,6 +348,11 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
     String cents(double? c) => c == null ? 'missed' : '${c >= 0 ? '+' : ''}${c.toStringAsFixed(0)}¢';
     String where(ScaleNote n) =>
         '${n.string} ${n.finger == 0 ? 'open' : '${n.finger}${n.placement == null ? '' : ' ${n.placement}'}'}';
+    // ADR 0018 note: a note far from the expected one also names the nearest semitone
+    String hint(GradedNote g) {
+      final h = neighbourHint(g, widget.config);
+      return h == null ? '' : '\n${h.closer ? 'sounds closer to' : 'almost'} ${h.name}';
+    }
     return ColoredBox(
       color: ScaleColors.neutral,
       child: SafeArea(
@@ -371,7 +376,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                       color: ScaleColors.of(g.grade),
-                      child: Text('${g.expected.name}\n${cents(g.cents)}\n${where(g.expected)}',
+                      child: Text('${g.expected.name}\n${cents(g.cents)}\n${where(g.expected)}${hint(g)}',
                           textAlign: TextAlign.center, style: const TextStyle(fontSize: 12)),
                     ),
                   ),

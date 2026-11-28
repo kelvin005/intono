@@ -67,6 +67,14 @@ List<String> coachingTips({
   CoachingConfig config = const CoachingConfig(),
 }) {
   final tips = <String>[];
+  // ADR 0018 note: notes labelled as the expected note but far from it come first: the worst one, and how many more.
+  final far = [for (final g in run.notes) if (neighbourHint(g, grading) != null) g]
+    ..sort((a, b) => b.cents!.abs().compareTo(a.cents!.abs()));
+  if (far.isNotEmpty) {
+    final w = far.first, h = neighbourHint(w, grading)!;
+    final more = far.length - 1;
+    tips.add('Your ${w.expected.name} was very ${h.sharp ? 'sharp' : 'flat'}, almost a ${h.name}.${more > 0 ? ' $more more were as far off.' : ''}');
+  }
   final habits = _habits(history, grading, config);
   for (var i = 0; i < habits.length && tips.length < config.maxTips; i++) {
     final h = habits[i];

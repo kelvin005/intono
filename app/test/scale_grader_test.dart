@@ -206,4 +206,52 @@ void main() {
     expect(near.notes[2].cents, closeTo(100, 1e-9));
     expect(near.extras, isEmpty);
   });
+
+  // ADR 0018 note: a note labelled as the expected note but far from it (more than neighbourCents, 40 by default) also shows the nearest
+  // semitone. Written before the implementation.
+  group('neighbour hint (ADR 0018 note)', () {
+    GradedNote graded(double cents) => gradeScale(gMajor, play(gMajor, cents: {3: cents}), cfg).notes[3]; // C4, midi 60
+
+    test('the default threshold is 40 cents; grading.json can change it', () {
+      expect(const GradingConfig().neighbourCents, 40);
+      expect(GradingConfig.fromJsonString('{"format":1,"neighbour_cents":30}').neighbourCents, 30);
+      expect(GradingConfig.fromJsonString('{"format":1}').neighbourCents, 40);
+      expect(() => GradingConfig.fromJsonString('{"format":1,"neighbour_cents":10}'), throwsFormatException); // below the yellow threshold
+      expect(File('assets/config/grading.json').readAsStringSync(), contains('"neighbour_cents": 40'));
+      expect(GradingConfig.fromJsonString(File('assets/config/grading.json').readAsStringSync()).neighbourCents, 40);
+    });
+
+    test('flat beyond 50 cents: sounds closer to the semitone below', () {
+      final h = neighbourHint(graded(-55), cfg)!;
+      expect((h.midi, h.closer, h.name), (59, true, 'B'));
+      expect(graded(-55).grade, Grade.red);
+    });
+
+    test('sharp beyond 50 cents: sounds closer to the semitone above', () {
+      final h = neighbourHint(graded(58), cfg)!;
+      expect((h.midi, h.closer, h.name), (61, true, 'C#'));
+    });
+
+    test('between 40 and 50 cents the expected note is still nearest: "almost" the neighbour', () {
+      final h = neighbourHint(graded(-45), cfg)!;
+      expect((h.midi, h.closer), (59, false));
+      expect(neighbourHint(graded(41), cfg)!.midi, 61);
+    });
+
+    test('40 cents or less, missed notes and in-tune notes have no hint', () {
+      expect(neighbourHint(graded(-40), cfg), isNull);
+      expect(neighbourHint(graded(40), cfg), isNull);
+      expect(neighbourHint(graded(0), cfg), isNull);
+      final missed = gradeScale(gMajor, play(gMajor)..removeAt(3), cfg).notes[3];
+      expect(missed.grade, Grade.missed);
+      expect(neighbourHint(missed, cfg), isNull);
+    });
+
+    test('the threshold comes from the config', () {
+      const tight = GradingConfig(neighbourCents: 25);
+      final g = gradeScale(gMajor, play(gMajor, cents: {3: -30.0}), tight).notes[3];
+      expect(neighbourHint(g, tight)!.midi, 59);
+      expect(neighbourHint(g, cfg), isNull);
+    });
+  });
 }

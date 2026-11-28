@@ -133,4 +133,43 @@ void main() {
       expect(() => CoachingConfig.fromJsonString('{"format": 1, "min_notes": 0}'), throwsFormatException);
     });
   });
+
+  group('far-off notes (ADR 0018 note)', () {
+    ScaleResult runWith(Map<int, double> cents) {
+      final notes = <Note>[
+        for (var i = 0; i < gMajor.notes.length; i++)
+          Note(
+              tStart: 0.5 * i,
+              tEnd: 0.5 * i + 0.4,
+              midiNote: gMajor.notes[i].midi,
+              meanCents: cents[i] ?? 0,
+              stdCents: 2,
+              vibratoRateHz: 0,
+              vibratoWidthCents: 0,
+              meanConfidence: 0.99,
+              frameCount: 75)
+      ];
+      return gradeScale(gMajor, notes, grading);
+    }
+
+    test('a note far flat gets "very flat, almost a <neighbour>", before the habit tips', () {
+      final t = tips(cell('A', 3, null, [14, 16, 15, 13, 17]), runWith({3: -55})); // index 3 is C4 in G major
+      expect(t.first, 'Your C4 was very flat, almost a B.');
+      expect(t.length, 2);
+      expect(t[1], startsWith('Your 3rd finger on A is often 15¢ sharp.'));
+    });
+
+    test('a note far sharp says very sharp; the worst note is named and the others counted', () {
+      final t = tips([], runWith({1: 44, 4: 58, 6: -47}));
+      expect(t.first, 'Your D4 was very sharp, almost a D#. 2 more were as far off.');
+    });
+
+    test('notes within the threshold add nothing', () {
+      expect(tips([], runWith({3: -35, 4: 30})).single, startsWith('No habitual error yet'));
+    });
+
+    test('one far note and nothing else is the only tip; max_tips still holds', () {
+      expect(tips([], runWith({3: -55}), c: const CoachingConfig(maxTips: 1)), ['Your C4 was very flat, almost a B.']);
+    });
+  });
 }

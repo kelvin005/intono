@@ -5,5 +5,6 @@
   "grade_yellow_cents": 15,
   "min_note_ms": 80,
   "merge_gap_ms": 120,
-  "merge_max_cents_diff": 25
+  "merge_max_cents_diff": 25,
+  "neighbour_cents": 40
 }

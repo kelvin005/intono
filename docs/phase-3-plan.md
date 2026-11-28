@@ -13,14 +13,13 @@ Architecture: `docs/architecture.md`; its Backend, Sync, remote-config and subsc
 | 3. Score-informed segmentation (hard gate) | **merged** (#34). Sealed **p3gate passed** (G-P3 1.0000) and **p3dev passed** (0 of 1024 invented, recall 1.0000), one run each (#36, #38) |
 | 4. Scale screen | **merged** (#33) |
 | 5. Finger/string results stored locally (drift) | **merged** (#41): every graded note, the totals as caches, Clear history, the database in Android/iOS backup. On-device test on the emulator and the Simulator. SQLite pinned by version and hash (#43, ADR 0015 Note 1) |
-| iOS: microphone off during review | **#46**: an output-only engine for the review. **Required before TestFlight** (Kelechi, 2026-11-28) |
+| iOS: microphone off during review | **merged** (#46): an output-only engine for the review. Required before TestFlight (Kelechi, 2026-11-28). **Phone check pending**: the CI test skips its review checks if the runner's audio session does not start, so CI does not prove it |
 | Narrow-step gates (Kelechi, 2026-11-28): (a) realistic scales, every note detuned 0 to 40¢, recall ≥ 0.99 and invented ≤ 0.5 %; (b) stress, every step 60 to 80¢, recall ≥ 0.97 | **Decoder change proposed (ADR 0018, DSP-freeze exception authorised), both sets pre-registered** (`docs/adr/sealed-p3semi-preregistration.md`; seeds 34601-34616 and 34501-34516). Dev: (a) 0.9979 / 0.15 %, (b) 0.9817 / 0.56 % (before: 0.9955 / 0.33 %, 0.891 / 1.93 %). Next: Kelechi's "merge", frozen binary from the merge, addendum, one run of each |
-| Finger/string heatmap screen (from `graded_notes`, last 30 days) | **#47** |
-| Coaching tips in words (rule-based templates) | **#49**: ADR 0016 proposed (thresholds and rules); **needs Kelechi's "merge"** |
-| Spoken summary after a run (on-device TTS, microphone paused) | **#50**: ADR 0017 proposed; **needs Kelechi's "merge"**. Built on #49 |
+| Finger/string heatmap screen (from `graded_notes`, last 30 days) | **merged** (#47). **Needs Kelechi's phone check** |
+| Coaching tips in words (rule-based templates) | **merged** (#49, ADR 0016; Kelechi 2026-11-28: thresholds, practice-scale choice and wording approved for now, to be validated with a teacher) |
+| Spoken summary after a run (on-device TTS, microphone paused) | **merged** (#50, ADR 0017). **Needs Kelechi's phone check** (with headphones) |
 | App uses scale mode | **merged** (#40): the scale screen gives the engine the expected sequence |
-| Replay of own audio (RAM, 60 s) | **merged** (#45): tap a note or "Play the run" on the review screen. Zeroed and released on leaving, Play again, background, close. Android stops the microphone during review. **Needs Kelechi's phone check** |
-| iOS: microphone off during review | **#46**: an output-only engine for the review. **Required before TestFlight** (Kelechi, 2026-11-28) |
+| Replay of own audio (RAM, 60 s) | **merged** (#45): tap a note or "Play the run" on the review screen. Zeroed and released on leaving, Play again, background, close. Android stops the microphone during review; iOS: see the microphone row above. **Needs Kelechi's phone check** |
 
 ## Open before Phase 3 closes
 
@@ -31,7 +30,7 @@ Phase 3 closes only when both of these are done, as the p3gate pre-registration 
 - **Decision:** the scale-mode test (`ShortNoteNextToA150CentStepWithVibratoInScaleMode`, 36 of 36) meets the requirement. The free-mode
   case stays a documented limit in ADR 0004, Amendment 5: no DSP change, and the test stays disabled as its record.
 - **The 60 to 80 cent known limit:** on dev seeds only, scale mode gives 0.996 against 0.824 in free mode (ADR 0004, Amendment 5).
-  No sealed gate was registered for it.
+  Two sealed gates now cover it: ADR 0018 and `docs/adr/sealed-p3semi-preregistration.md` (status table above).
 
 ### B. Revisit the ADR 0004 glitch rule after ADR 0007: **open until ADR 0007 is implemented** (Kelechi, 2026-11-28)
 
@@ -49,7 +48,7 @@ Phase 3 closes only when both of these are done, as the p3gate pre-registration 
 The on-device database test on the iOS Simulator hangs on its first attempt after a fresh build, right after "Xcode build done". #42
 handles it: a fresh boot, a 10-minute limit per attempt, one retry, a step limit. The retry passes in about 1.5 minutes. Each iOS run
 loses about 10 minutes. The cause (install, launch or VM-service connection) is not being chased now.
-On #45 (2026-11-28) both attempts hung once; a re-run passed on the first attempt. When the retry is not enough, the job fails and
+On #45 and #46 (2026-11-28) both attempts hung once each; re-runs passed. #49, #50 and #51 passed first time. When the retry is not enough, the job fails and
 is re-run by hand.
 
 ## Decisions (Kelechi)
