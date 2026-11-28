@@ -7,6 +7,8 @@ import 'src/audio_control.dart';
 import 'src/bench_runner.dart';
 import 'src/bench_screen.dart';
 import 'src/db/practice_db_open.dart';
+import 'src/coaching/coaching.dart';
+import 'src/db/practice_stats.dart';
 import 'src/db/practice_store.dart';
 import 'src/heatmap/heatmap.dart';
 import 'src/heatmap/heatmap_screen.dart';
@@ -42,6 +44,7 @@ class _IntonoAppState extends State<IntonoApp> {
   PracticeStore? _store; // the practice history (ADR 0015); null until opened, or if it cannot be opened
   ScaleLibrary? _library;
   GradingConfig _grading = const GradingConfig();
+  CoachingConfig _coaching = const CoachingConfig();
 
   @override
   void initState() {
@@ -78,10 +81,17 @@ class _IntonoAppState extends State<IntonoApp> {
     } on Exception {
       // keep the defaults (the same values)
     }
+    var coaching = const CoachingConfig();
+    try {
+      coaching = CoachingConfig.fromJsonString(await rootBundle.loadString('assets/config/coaching.json'));
+    } on Exception {
+      // keep the defaults (the same values, ADR 0016)
+    }
     if (!mounted) return;
     setState(() {
       _library = lib;
       _grading = cfg;
+      _coaching = coaching;
     });
   }
 
@@ -116,6 +126,13 @@ class _IntonoAppState extends State<IntonoApp> {
                 library: _library!,
                 config: _grading,
                 onClose: () => setState(() => _scales = false),
+                coach: (r) async {
+                  final store = _store;
+                  final history = store == null
+                      ? [for (final n in storedNotesOf(r)) ('this run', n)]
+                      : await store.gradedNotesSince(DateTime.now().toUtc().subtract(const Duration(days: 30)));
+                  return coachingTips(history: history, run: r, library: _library!, grading: _grading, config: _coaching);
+                },
                 onRunFinished: (r, started, ended) async {
                   final store = _store;
                   if (store == null) throw StateError('the practice history is not open');

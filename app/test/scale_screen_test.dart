@@ -71,6 +71,53 @@ void main() {
     expect(end.isBefore(start), isFalse);
   });
 
+  testWidgets('the coaching tips appear on the results, after the run is saved (ADR 0016)', (t) async {
+    final order = <String>[];
+    await t.pumpWidget(host(ScaleScreen(
+      audio: audio,
+      engineFactory: (_) => engine,
+      library: lib,
+      config: const GradingConfig(),
+      onClose: () {},
+      onRunFinished: (r, s, e) async => order.add('saved'),
+      coach: (r) async {
+        order.add('coach');
+        return ['Your 3rd finger on A is often 15¢ sharp. Play F major, 1 octave slowly with the drone.', 'Second tip.'];
+      },
+    )));
+    await t.tap(find.text('G major, 1 octave'));
+    await t.pump();
+    await t.pump();
+    engine.queuedNotes.add(n(55, 1, 0));
+    await t.pump(const Duration(milliseconds: 150));
+    await t.tap(find.text('Stop'));
+    await t.pump();
+    await t.pump();
+    expect(order, ['saved', 'coach']);
+    expect(find.text('Your 3rd finger on A is often 15¢ sharp. Play F major, 1 octave slowly with the drone.'), findsOneWidget);
+    expect(find.text('Second tip.'), findsOneWidget);
+  });
+
+  testWidgets('a coaching failure leaves the results without tips', (t) async {
+    await t.pumpWidget(host(ScaleScreen(
+      audio: audio,
+      engineFactory: (_) => engine,
+      library: lib,
+      config: const GradingConfig(),
+      onClose: () {},
+      coach: (r) async => throw StateError('db'),
+    )));
+    await t.tap(find.text('G major, 1 octave'));
+    await t.pump();
+    await t.pump();
+    engine.queuedNotes.add(n(55, 1, 0));
+    await t.pump(const Duration(milliseconds: 150));
+    await t.tap(find.text('Stop'));
+    await t.pump();
+    await t.pump();
+    expect(find.text('Play again'), findsOneWidget);
+  });
+
   testWidgets('a store failure is shown on the results and does not hide them', (t) async {
     await t.pumpWidget(host(ScaleScreen(
       audio: audio,

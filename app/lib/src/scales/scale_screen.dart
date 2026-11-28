@@ -44,6 +44,7 @@ class ScaleScreen extends StatefulWidget {
     required this.config,
     required this.onClose,
     this.onRunFinished,
+    this.coach,
   });
 
   final AudioControl audio;
@@ -55,6 +56,9 @@ class ScaleScreen extends StatefulWidget {
   /// A finished run (the last note played, Stop, or the app leaving the foreground), for the practice history (ADR 0015). Called once
   /// per run; the store skips a run with no played note. Null: nothing is stored.
   final Future<void> Function(ScaleResult result, DateTime startedAt, DateTime endedAt)? onRunFinished;
+
+  /// The coaching tips for a finished run (ADR 0016), asked for after [onRunFinished] completes so the history includes the run.
+  final Future<List<String>> Function(ScaleResult result)? coach;
 
   @override
   State<ScaleScreen> createState() => _ScaleScreenState();
@@ -69,6 +73,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
   EngineApi? _engine;
   String _error = '';
   String _saveError = '';
+  List<String> _tips = const [];
   bool _starting = false;
   DateTime _runStarted = DateTime.now();
   // Replay (ADR 0013): armed with each run; during review the session stays open (input paused) for playback.
@@ -146,6 +151,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
       _run = run;
       _result = null;
       _saveError = '';
+      _tips = const [];
       _runStarted = DateTime.now();
       _phase = _Phase.run;
     });
@@ -218,11 +224,20 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
 
   Future<void> _save(ScaleResult r, DateTime started, DateTime ended) async {
     final save = widget.onRunFinished;
-    if (save == null) return;
+    if (save != null) {
+      try {
+        await save(r, started, ended);
+      } catch (_) {
+        if (mounted) setState(() => _saveError = 'This run could not be saved to your history.');
+      }
+    }
+    final coach = widget.coach;
+    if (coach == null) return;
     try {
-      await save(r, started, ended);
+      final tips = await coach(r);
+      if (mounted && identical(_result, r)) setState(() => _tips = tips);
     } catch (_) {
-      if (mounted) setState(() => _saveError = 'This run could not be saved to your history.');
+      // no tips this time; the results stand on their own
     }
   }
 
@@ -327,6 +342,7 @@ class _ScaleScreenState extends State<ScaleScreen> with TickerProviderStateMixin
             ),
             if (r.extras.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text('${r.extras.length} extra notes')),
             if (_saveError.isNotEmpty) Padding(padding: const EdgeInsets.only(top: 12), child: Text(_saveError)),
+            for (final tip in _tips) Padding(padding: const EdgeInsets.only(top: 12), child: Text(tip)),
             if (_reviewOpen && r.notes.any((g) => g.played != null)) ...[
               const SizedBox(height: 20),
               const Text('Tap a note to hear it.', style: TextStyle(fontSize: 13)),

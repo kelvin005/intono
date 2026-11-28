@@ -1,0 +1,9 @@
+{
+  "format": 1,
+  "_comment": "Coaching tip thresholds (ADR 0016). Bundled with the app in v1 (no remote config, ADR 0012): change them with a release.",
+  "min_notes": 4,
+  "sharp_cents": 10,
+  "often_fraction": 0.6,
+  "missed_tip_min": 2,
+  "max_tips": 2
+}
