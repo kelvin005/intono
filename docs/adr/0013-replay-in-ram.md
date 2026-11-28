@@ -52,9 +52,11 @@ Kelechi wants replay in v1 without weakening it.
 - **In review (frozen)** the microphone reaches neither the engine nor the ring, so nothing grades the playback. Stream statistics
   start afresh after the pause, so it is not counted as an input gap.
   - **Android** also stops the input stream at freeze, so the system microphone indicator goes off during review.
-  - **iOS** keeps the `AVAudioEngine` input running, because input and output are one engine and stopping input alone means
-    reconfiguring it while it runs. Every sample is discarded at the pump, but the system microphone indicator stays on during review.
-    Stopping it is a possible follow-up.
+  - **iOS** (Kelechi 2026-11-28: the indicator must be off during review, before TestFlight; #46). At freeze the session's
+    `AVAudioEngine` (input and output) stops, and playback goes through a second engine with an output node only, under the playback
+    category. That engine never touches the input node, so no input IO runs and the indicator turns off. Release stops it, before the
+    pump is freed. XCTest checks on the Simulator: input running before freeze, not after; the playback category; the review engine
+    running until release.
 - **Lifecycle (app).** The ring is armed after capture starts and frozen when the run ends. It is released, then the session stopped,
   when any of these happens:
   - the user leaves the review;

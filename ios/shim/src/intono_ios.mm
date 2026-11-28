@@ -36,6 +36,10 @@ struct intono_ios_session {
   double sample_rate = 0;
   bool engine_running = false;
   std::atomic<bool> lost{false};
+  // review (ADR 0013): output only, after the session's engine is stopped
+  AVAudioEngine* review = nil;
+  AVAudioSourceNode* review_source = nil;
+  bool review_running = false;
 };
 
 namespace {
@@ -50,6 +54,56 @@ std::string describe(NSError* e) { return e ? std::string(e.localizedDescription
 const char* port_type(NSArray<AVAudioSessionPortDescription*>* ports) {
   AVAudioSessionPortDescription* p = ports.firstObject;
   return p ? (p.portType.UTF8String ?: "?") : "none";
+}
+
+// The output node: the pump's output (drone or replay) when it has something to render, else silence. Used by the session's
+// engine and by the output-only review engine (ADR 0013).
+AVAudioSourceNode* make_source(AudioPump* pump, AVAudioFormat* mono) {
+  return [[AVAudioSourceNode alloc] initWithFormat:mono
+                                       renderBlock:^OSStatus(BOOL* silence, const AudioTimeStamp*, AVAudioFrameCount n, AudioBufferList* out) {
+    if (!out || out->mNumberBuffers < 1 || !out->mBuffers[0].mData) return noErr;
+    float* d = static_cast<float*>(out->mBuffers[0].mData);
+    if (!pump->output_wanted()) {   // neither the drone nor a replay (ADR 0013): silence
+      for (UInt32 b = 0; b < out->mNumberBuffers; ++b) std::memset(out->mBuffers[b].mData, 0, out->mBuffers[b].mDataByteSize);
+      *silence = YES;
+      return noErr;
+    }
+    pump->on_output(d, static_cast<int>(n));
+    for (UInt32 b = 1; b < out->mNumberBuffers; ++b) std::memcpy(out->mBuffers[b].mData, d, sizeof(float) * n);
+    return noErr;
+  }];
+}
+
+// Review (ADR 0013, Kelechi 2026-11-28: the microphone indicator must be off during review). The session's engine (input and output)
+// is stopped at freeze; playback goes through this second engine, which never touches the input node, under the playback category.
+bool start_review_output(intono_ios_session* s) {
+  AVAudioSession* as = [AVAudioSession sharedInstance];
+  NSError* e = nil;
+  if (![as setCategory:AVAudioSessionCategoryPlayback mode:AVAudioSessionModeDefault options:0 error:&e]) return false;
+  if (![as setActive:YES error:&e]) return false;
+  AVAudioFormat* mono = [[AVAudioFormat alloc] initStandardFormatWithSampleRate:s->sample_rate channels:1];
+  s->review = [[AVAudioEngine alloc] init];
+  s->review_source = make_source(s->pump.get(), mono);
+  [s->review attachNode:s->review_source];
+  [s->review connect:s->review_source to:s->review.mainMixerNode format:mono];   // the output node only: no input IO
+  [s->review prepare];
+  if (![s->review startAndReturnError:&e]) {
+    [s->review detachNode:s->review_source];
+    s->review_source = nil;
+    s->review = nil;
+    return false;
+  }
+  s->review_running = true;
+  return true;
+}
+
+void stop_review_output(intono_ios_session* s) {
+  if (s->review && s->review_running) [s->review stop];   // synchronous: no render block runs after it returns
+  s->review_running = false;
+  if (s->review && s->review_source) [s->review detachNode:s->review_source];
+  if (s->review) [[AVAudioSession sharedInstance] setActive:NO withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation error:nil];
+  s->review_source = nil;
+  s->review = nil;
 }
 
 void stop_engine(intono_ios_session* s) {
@@ -72,6 +126,7 @@ void stop_engine(intono_ios_session* s) {
 
 void destroy(intono_ios_session* s) {
   if (s->soak) s->soak->stop_sampler();
+  stop_review_output(s);   // before the pump: its render block uses it
   stop_engine(s);
   s->pump.reset();
   if (s->ie) intono_destroy(s->ie);
@@ -142,19 +197,7 @@ extern "C" intono_ios_session* intono_ios_start(int soak_minutes, int inline_eng
 
     // Drone: a mono source node into the main mixer, silent while the drone is off.
     AVAudioFormat* mono = [[AVAudioFormat alloc] initStandardFormatWithSampleRate:s->sample_rate channels:1];
-    s->source = [[AVAudioSourceNode alloc] initWithFormat:mono
-                                              renderBlock:^OSStatus(BOOL* silence, const AudioTimeStamp*, AVAudioFrameCount n, AudioBufferList* out) {
-      if (!out || out->mNumberBuffers < 1 || !out->mBuffers[0].mData) return noErr;
-      float* d = static_cast<float*>(out->mBuffers[0].mData);
-      if (!pump->output_wanted()) {   // neither the drone nor a replay (ADR 0013): silence
-        for (UInt32 b = 0; b < out->mNumberBuffers; ++b) std::memset(out->mBuffers[b].mData, 0, out->mBuffers[b].mDataByteSize);
-        *silence = YES;
-        return noErr;
-      }
-      pump->on_output(d, static_cast<int>(n));
-      for (UInt32 b = 1; b < out->mNumberBuffers; ++b) std::memcpy(out->mBuffers[b].mData, d, sizeof(float) * n);
-      return noErr;
-    }];
+    s->source = make_source(pump, mono);
     [s->engine attachNode:s->source];
     [s->engine connect:s->source to:s->engine.mainMixerNode format:mono];
 
@@ -209,10 +252,13 @@ extern "C" int intono_ios_replay_arm(intono_ios_session* s, double seconds) {
   return s && s->pump && s->pump->replay().arm(static_cast<int>(std::lround(s->sample_rate)), seconds) ? 1 : 0;
 }
 extern "C" void intono_ios_replay_freeze(intono_ios_session* s) {
-  if (s && s->pump) s->pump->replay().freeze();
+  if (!s || !s->pump || !s->pump->replay().armed()) return;
+  s->pump->replay().freeze();
+  stop_engine(s);           // the microphone stops: no input IO runs during review, so the indicator turns off
+  start_review_output(s);   // if it cannot start, the review has no sound (replay_play answers 0)
 }
 extern "C" int intono_ios_replay_play(intono_ios_session* s, double from_s, double to_s) {
-  if (!s || !s->pump) return 0;
+  if (!s || !s->pump || !s->review_running) return 0;
   ReplayRing& r = s->pump->replay();
   return r.play(r.frame_of_seconds(from_s), r.frame_of_seconds(to_s)) ? 1 : 0;
 }
@@ -220,8 +266,12 @@ extern "C" void intono_ios_replay_stop(intono_ios_session* s) {
   if (s && s->pump) s->pump->replay().stop_playback();
 }
 extern "C" void intono_ios_replay_release(intono_ios_session* s) {
-  if (s && s->pump) s->pump->replay().release();   // zeroed before it is freed
+  if (!s || !s->pump) return;
+  s->pump->replay().release();   // zeroed before it is freed
+  stop_review_output(s);
 }
+extern "C" int intono_ios_input_running(const intono_ios_session* s) { return s && s->engine_running ? 1 : 0; }
+extern "C" int intono_ios_review_output_running(const intono_ios_session* s) { return s && s->review_running ? 1 : 0; }
 extern "C" int intono_ios_replay_playing(const intono_ios_session* s) { return s && s->pump && s->pump->replay().playing() ? 1 : 0; }
 
 extern "C" int intono_ios_info(intono_ios_session* s, char* out, int cap) {
@@ -236,6 +286,7 @@ extern "C" int intono_ios_info(intono_ios_session* s, char* out, int cap) {
                   port_type(as.currentRoute.inputs), port_type(as.currentRoute.outputs), s->lost.load() ? ", LOST" : "");
     std::string t = b;
     t += s->pump && s->pump->drone_enabled() ? "output: drone on\n" : "output: drone off\n";
+    if (s->review_running) t += "review: output-only engine, microphone off\n";
     if (s->pump) t += pump_text(*s->pump);
     return copy_out(t, out, cap);
   }

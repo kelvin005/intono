@@ -1,3 +1,4 @@
+import AVFoundation
 import Darwin
 import Flutter
 import Testing
@@ -18,6 +19,8 @@ private typealias StartFn = @convention(c) (Int32, Int32, UnsafeMutablePointer<C
 private typealias StopFn = @convention(c) (OpaquePointer?) -> Void
 private typealias TextFn = @convention(c) (OpaquePointer?, UnsafeMutablePointer<CChar>?, Int32) -> Int32
 private typealias EngineFn = @convention(c) (OpaquePointer?) -> Int
+private typealias ArmFn = @convention(c) (OpaquePointer?, Double) -> Int32
+private typealias SessionIntFn = @convention(c) (OpaquePointer?) -> Int32
 
 struct RunnerTests {
 
@@ -51,12 +54,33 @@ struct RunnerTests {
       #expect(text.contains("AVAudioEngine"))
       #expect(text.contains("Measurement") || text.contains("measurement"))
       #expect(engine(s) != 0)
+      review(s)
       stop(s)
     } else {
       let reason = String(cString: err)
       print("ios session did not start: \(reason)")
       #expect(!reason.isEmpty, "a failed start must say why")
     }
+  }
+
+  // ADR 0013 (Kelechi 2026-11-28): during review the microphone is off. Freeze stops the input engine and starts an output-only one
+  // under the playback category; release stops that too. Part of the session test: Swift Testing runs tests in parallel, and two
+  // audio sessions at once would collide.
+  private func review(_ s: OpaquePointer) {
+    guard let arm = sym("intono_ios_replay_arm", ArmFn.self), let freeze = sym("intono_ios_replay_freeze", StopFn.self),
+          let release = sym("intono_ios_replay_release", StopFn.self), let input = sym("intono_ios_input_running", SessionIntFn.self),
+          let output = sym("intono_ios_review_output_running", SessionIntFn.self) else {
+      Issue.record("replay functions missing")
+      return
+    }
+    #expect(input(s) == 1)
+    #expect(arm(s, 60) == 1)
+    freeze(s)
+    #expect(input(s) == 0, "the microphone must be off during review")
+    #expect(AVAudioSession.sharedInstance().category == .playback, "review uses the playback category: no input route")
+    #expect(output(s) == 1, "review plays through the output-only engine")
+    release(s)
+    #expect(output(s) == 0)
   }
 
   @Test func headphonesIsAYesOrNo() {
