@@ -83,3 +83,21 @@ all pass),
 `NoteTracker.ScaleModeNarrowTrillWithVibratoStaysUnderTheMeasuredFailures` (the same with +-12 cent vibrato on every note, phase-locked,
 the hardest case: 12 of 16 failed with the old +-50 tolerance, 7 of 16 fail now; the bound pins that and is lowered when the decoder improves),
 `EngineNotes.ScaleModeLabelsANoteWithinSixtyCentsAsTheDueNote` (fails with window 0; free mode keeps the nearest target).
+
+## Note 1 (2026-11-28, Kelechi): show the nearest semitone for a far-off note (UI only, no DSP change)
+
+The 60 cent label window means a note can be reported as the expected note while its mean is far from it (C at -55 cents sounds nearer to B).
+The grade is unchanged (it was already red beyond the yellow threshold); the app now says so in words.
+
+- **Threshold:** `neighbour_cents` in `app/assets/config/grading.json`, **40**. A played note whose cents from the expected note exceed it
+  in absolute value gets a hint (`neighbourHint` in `grader.dart`; missed notes and notes at 40 or less get none). The threshold must not be
+  below the yellow threshold (15).
+- **Results list and review detail** (the result cell of the scale screen, which is also the tap-to-replay target): a third line under the
+  cents. More than 50 cents: **"sounds closer to B"** (the neighbour really is nearer). Between 40 and 50: **"almost B"** (the expected note
+  is still the nearest; this wording is my choice for that band, since "closer to" would be false there). The neighbour is the semitone on
+  the side the note is off, shown as a pitch class.
+- **Coaching** (first tip, before the habit tips): "Your C4 was very flat, almost a B." The worst such note of the run is named, and
+  "2 more were as far off." counts the others. The spoken summary (ADR 0017) reads it like any tip.
+- **Not changed:** grading, scores, what is stored (`graded_notes` keeps the cents from the expected note), the heatmap, the engine.
+- Tests first: `scale_grader_test.dart` (hint, 40 and 50 boundaries, config), `coaching_test.dart` (wording, order, max tips),
+  `scale_screen_test.dart` (the cell text).

@@ -1,4 +1,5 @@
 import '../engine_api.dart';
+import '../meter_state.dart' show noteName;
 import 'grading_config.dart';
 import 'scale.dart';
 
@@ -18,6 +19,25 @@ class GradedNote {
 
   /// Cents from the expected note's target in the engine's tuning; null if missed.
   final double? cents;
+}
+
+/// The nearest-semitone hint for a far-off note (ADR 0018 note): [midi] is the neighbour on the side the note is off, [closer] is true
+/// when the note really is nearer to it than to the expected note (more than 50 cents), false for "almost" (between the threshold and 50).
+class NeighbourHint {
+  const NeighbourHint(this.midi, this.closer, this.sharp);
+  final int midi;
+  final bool closer;
+  final bool sharp;
+
+  /// Pitch class only ("B", "C#"): the neighbour is the adjacent semitone, so the octave adds nothing.
+  String get name => noteName(midi).replaceAll(RegExp(r'-?\d+$'), '');
+}
+
+/// A hint for [g] if it is a played note more than [GradingConfig.neighbourCents] from the expected note; null otherwise.
+NeighbourHint? neighbourHint(GradedNote g, GradingConfig cfg) {
+  final c = g.cents;
+  if (c == null || c.abs() <= cfg.neighbourCents) return null;
+  return NeighbourHint(g.expected.midi + (c > 0 ? 1 : -1), c.abs() > 50, c > 0);
 }
 
 class ScaleResult {
