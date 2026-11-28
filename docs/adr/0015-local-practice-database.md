@@ -79,3 +79,43 @@ Constraints from earlier ADRs:
 2. Store every graded note (string, finger, placement, cents, grade, timing), plus per-session totals as a cache, so the heatmap can be
    recomputed if the thresholds or the mapping change.
 3. Keep forever; add "Clear history" in settings.
+
+## Note 1 (2026-11-28): where SQLite comes from, and the pin
+
+**Finding.** drift 2.35.4 resolved with `package:sqlite3` 3.9.2, which brings SQLite in through a Dart build hook. There is no
+`sqlite3_flutter_libs` and no CocoaPods (ADR 0010 holds). I read the hook's source at the `sqlite3-3.9.2` tag, `hook/build.dart` and
+`lib/src/hook/compile/description.dart`:
+
+- **By default it downloads a prebuilt binary**, it does not compile. The URL is
+  `https://github.com/simolus3/sqlite3.dart/releases/download/sqlite3-3.9.2/<file>`, one file per platform.
+- **Each download is verified.** The file is hashed while it downloads and rejected unless its sha256 matches a table compiled into the
+  package (`lib/src/hook/asset_hashes.dart`). `pubspec.lock` pins the package itself by version and archive sha256.
+- So the binary was already fixed by version and hash, but only transitively and out of sight.
+- **I verified the release independently.** Downloading each of the 7 binaries we use gave exactly the package's hashes. They report
+  SQLite 3.54.1.
+
+**Decision (Kelechi, 2026-11-28: pin by version and hash, or compile from source): pin.** Compiling from source would mean vendoring
+the SQLite amalgamation and keeping it updated ourselves (the hook's `source: source`). The pin gives the same guarantee, a fixed and
+verified binary, with less to maintain.
+
+- `app/tool/sqlite3_pin.json` records:
+  - the package version and archive sha256;
+  - the release tag;
+  - the download URL pattern;
+  - the sha256 of every binary used: Android arm64-v8a, armeabi-v7a and x86_64, iOS arm64, the iOS Simulator arm64 and x86_64, and
+    Linux x86_64 for the host tests.
+- `.github/scripts/check_sqlite_pin.py` runs in the `app` job after `flutter pub get`. It fails CI when any of these differ from the pin:
+  - the lockfile's sqlite3 version or archive hash;
+  - the fetched package's release tag, URL pattern or any pinned binary hash;
+  - or when `pubspec.yaml` sets hook `user_defines`, which could redirect the hook to another source.
+
+  It was tested passing, and failing on a changed hash, a changed version and an override.
+- **To update SQLite:**
+  1. Change the sqlite3 version through `pubspec.lock`.
+  2. Download and re-verify every binary from the new release.
+  3. Update the pin file.
+  4. Add a line here.
+
+**What the pin does not cover.** It trusts that the release binaries are built from sqlite.org's sources by the package's published
+release workflow. It verifies that we always get the same bytes, not how they were built. If that trust is ever not enough, the fallback
+is `source: source` with a vendored, hash-checked amalgamation, which would need an amendment to this ADR.

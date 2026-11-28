@@ -60,6 +60,8 @@ jobs:
           else
             flutter pub get
           fi
+      - name: SQLite is the pinned release (ADR 0015 Note 1)
+        run: python3 .github/scripts/check_sqlite_pin.py --app app
       - name: Regenerate the FFI bindings and drift's code, and require them (and the lockfile) to be up to date
         working-directory: app
         run: |
