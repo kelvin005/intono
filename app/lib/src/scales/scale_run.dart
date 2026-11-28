@@ -33,6 +33,12 @@ class ScaleRun {
     return latest.isWrong ? Grade.red : latest.grade;
   }
 
+  /// A confident suggestion to regrade this run at another octave or as another scale, or null (see [suggestScale]).
+  ScaleSuggestion? suggestion(ScaleLibrary library) => suggestScale(scale, _played, library, config);
+
+  /// The same notes graded against [other] (a suggestion's scale).
+  ScaleResult regrade(ScaleDef other) => gradeScale(other, _played, config);
+
   /// True once the last note of the scale (the low tonic after the descent) has been played.
   bool get complete => _graded != null && _graded!.notes.last.heard != null;
 

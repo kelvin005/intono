@@ -9,5 +9,7 @@
   "neighbour_cents": 40,
   "label_window_cents": 60,
   "min_heard_fraction": 0.25,
-  "bad_run_fraction": 0.5
+  "bad_run_fraction": 0.5,
+  "suggest_match_fraction": 0.6,
+  "suggest_min_gain": 0.3
 }

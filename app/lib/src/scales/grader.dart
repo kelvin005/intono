@@ -52,6 +52,60 @@ NeighbourHint? neighbourHint(GradedNote g, GradingConfig cfg) {
   return NeighbourHint(g.expected.midi + (c > 0 ? 1 : -1), c.abs() > 50, c > 0);
 }
 
+enum SuggestionKind { octave, scale }
+
+/// "You seem to be playing an octave higher. Switch?" / "This sounds like D major, 1 octave. Switch?": the run, regraded against
+/// [scale], matches clearly better than against the chosen scale.
+class ScaleSuggestion {
+  const ScaleSuggestion(this.kind, this.scale, {this.semitones = 0});
+
+  final SuggestionKind kind;
+
+  /// What to regrade against: the chosen scale moved by [semitones] (±12), or another scale of the library.
+  final ScaleDef scale;
+
+  /// +12: the player is an octave higher than the scale; -12: an octave lower; 0 for [SuggestionKind.scale].
+  final int semitones;
+
+  String get message => kind == SuggestionKind.octave
+      ? 'You seem to be playing an octave ${semitones > 0 ? 'higher' : 'lower'}. Switch?'
+      : 'This sounds like ${scale.title}. Switch?';
+}
+
+/// Whether a run that fits the chosen scale badly fits another octave of it (exactly ±12 semitones), or another scale of [library],
+/// much better. Needs at least [minNotes] played notes. The octave is tried first. Null when there is no confident suggestion.
+ScaleSuggestion? suggestScale(ScaleDef current, List<Note> played, ScaleLibrary library, GradingConfig cfg, {int minNotes = 4}) {
+  final used = _usable(played, cfg);
+  if (used.length < minNotes) return null;
+  double share(ScaleDef s) => gradeScale(s, played, cfg).notes.where((g) => g.played != null).length / used.length;
+  final base = share(current);
+  ScaleSuggestion? best;
+  var bestShare = 0.0;
+  void consider(ScaleSuggestion c) {
+    final sh = share(c.scale);
+    if (sh >= cfg.suggestMatchFraction && sh - base >= cfg.suggestMinGain && sh > bestShare + 1e-9) {
+      best = c;
+      bestShare = sh;
+    }
+  }
+
+  for (final d in const [12, -12]) {
+    consider(ScaleSuggestion(SuggestionKind.octave, current.shifted(d), semitones: d));
+  }
+  if (best != null) return best;
+  for (final s in library.scales) {
+    if (s.id != current.id) consider(ScaleSuggestion(SuggestionKind.scale, s));
+  }
+  return best;
+}
+
+/// The played notes that count: split notes merged, notes shorter than the minimum dropped.
+List<Note> _usable(List<Note> played, GradingConfig cfg) {
+  final ordered = [...played]..sort((a, b) => a.tStart.compareTo(b.tStart));
+  final merged = _mergeSplits(ordered, cfg.mergeGapMs / 1000, cfg.mergeMaxCentsDiff);
+  return [for (final n in merged) if ((n.tEnd - n.tStart) * 1000 >= cfg.minNoteMs) n];
+}
+
 class ScaleResult {
   const ScaleResult({
     required this.scale,
@@ -99,9 +153,7 @@ double centsToExpected(Note n, int expectedMidi) => (n.midiNote - expectedMidi) 
 /// with a semi-global edit distance (a match within the label window, 60 cents, costs 0; a wrong note, a missed note and an extra note cost 1 each; the
 /// unplayed rest of the scale is free), then grade. Works on a finished run and on a run still being played.
 ScaleResult gradeScale(ScaleDef scale, List<Note> played, GradingConfig cfg) {
-  final ordered = [...played]..sort((a, b) => a.tStart.compareTo(b.tStart));
-  final merged = _mergeSplits(ordered, cfg.mergeGapMs / 1000, cfg.mergeMaxCentsDiff);
-  final notes = [for (final n in merged) if ((n.tEnd - n.tStart) * 1000 >= cfg.minNoteMs) n];
+  final notes = _usable(played, cfg);
   final exp = scale.notes;
   final n = exp.length, m = notes.length;
 
