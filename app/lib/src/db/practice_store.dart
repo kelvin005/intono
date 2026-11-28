@@ -40,8 +40,8 @@ class PracticeStore {
   final DateTime Function() _clock;
   final math.Random _random;
 
-  /// Stores a finished run in one transaction and returns its session id. A run with no played note is not stored (nothing was
-  /// practised); then the result is null.
+  /// Stores a finished run in one transaction and returns its session id. A run with no played note, or one that was not heard
+  /// ([ScaleResult.notHeard]), is not stored (nothing trustworthy was practised); then the result is null.
   Future<String?> saveRun(
     ScaleResult r, {
     required DateTime startedAt,
@@ -50,7 +50,7 @@ class PracticeStore {
     String tuning = 'equal',
     String instrument = 'violin',
   }) async {
-    if (r.notes.every((g) => g.played == null)) return null;
+    if (r.notHeard || r.notes.every((g) => g.played == null)) return null;
     final id = uuidV7(_clock(), _random);
     final notes = storedNotesOf(r);
     await db.transaction(() async {
@@ -151,12 +151,20 @@ class PracticeStore {
 
   /// The graded notes of every session that started at or after [since] (UTC), as (session id, note): the heatmap's input
   /// (architecture doc, "Coaching": the last 30 days). From `graded_notes`, so it follows a threshold change without a cache rebuild.
-  Future<List<(String, StoredNote)>> gradedNotesSince(DateTime since, {String instrument = 'violin'}) async {
+  ///
+  /// With [trustedWithin] only the notes graded within that many cents are returned (🟢/🟡/🔴 by cents): not the missed, wrong or
+  /// out-of-window ones. Tips and the heatmap use only these.
+  Future<List<(String, StoredNote)>> gradedNotesSince(DateTime since, {String instrument = 'violin', double? trustedWithin}) async {
     final rows = await db.customSelect(
       'SELECT g.session_id, g.idx, g.midi_note, g.string, g.finger, g.placement, g.grade, g.cents, g.t_start, g.t_end '
       'FROM graded_notes g JOIN sessions s ON s.id = g.session_id WHERE s.started_at >= ? AND s.instrument = ? '
+      '${trustedWithin == null ? '' : 'AND g.cents IS NOT NULL AND ABS(g.cents) <= ? '}'
       'ORDER BY s.started_at, g.idx',
-      variables: [Variable.withInt(since.toUtc().millisecondsSinceEpoch), Variable.withString(instrument)],
+      variables: [
+        Variable.withInt(since.toUtc().millisecondsSinceEpoch),
+        Variable.withString(instrument),
+        if (trustedWithin != null) Variable.withReal(trustedWithin),
+      ],
     ).get();
     return [
       for (final r in rows)
@@ -254,6 +262,51 @@ class PracticeStore {
         await _writeStats(id, notes);
       }
     });
+  }
+
+  /// The settings key and value of the "trusted notes" cleanup (ADR 0011, status note 2026-11-28).
+  static const rulesKey = 'grading_rules';
+  static const rulesVersion = '2';
+
+  /// One-time cleanup of history written before wrong notes existed (a note 1029¢ from the expected one was stored as a 🔴 with its
+  /// cents, and fed tips and the heatmap): every stored note beyond [GradingConfig.labelWindowCents] becomes a missed note without
+  /// cents, the sessions the new rules would not have saved (more than [GradingConfig.badRunFraction] missed or wrong) are deleted,
+  /// and the totals and `note_stats` of the rest are recomputed from `graded_notes`. Runs once (the [rulesKey] setting); returns the
+  /// number of sessions deleted, or null if it had already run.
+  Future<int?> applyTrustedNotesRules(GradingConfig cfg) async {
+    if (await setting(rulesKey) == rulesVersion) return null;
+    var deleted = 0;
+    await db.transaction(() async {
+      await db.customStatement(
+        "UPDATE graded_notes SET grade = 'missed', cents = NULL, t_start = NULL, t_end = NULL WHERE cents IS NOT NULL AND ABS(cents) > ?",
+        [cfg.labelWindowCents],
+      );
+      final bad = await db.customSelect(
+        "SELECT session_id FROM graded_notes GROUP BY session_id "
+        "HAVING SUM(CASE WHEN grade = 'missed' THEN 1 ELSE 0 END) > ? * COUNT(*)",
+        variables: [Variable.withReal(cfg.badRunFraction)],
+      ).get();
+      for (final r in bad) {
+        final id = r.read<String>('session_id');
+        await db.customStatement('DELETE FROM note_stats WHERE session_id = ?', [id]);
+        await db.customStatement('DELETE FROM graded_notes WHERE session_id = ?', [id]);
+        await db.customStatement('DELETE FROM sessions WHERE id = ?', [id]);
+        deleted++;
+      }
+      final ss = await db.customSelect('SELECT id FROM sessions').get();
+      for (final s in ss) {
+        final id = s.read<String>('id');
+        final notes = await gradedNotes(id);
+        final t = totalsOf(notes);
+        await db.customStatement(
+          'UPDATE sessions SET score_percent = ?, green = ?, yellow = ?, red = ?, missed = ?, note_count = ? WHERE id = ?',
+          [t.scorePercent, t.green, t.yellow, t.red, t.missed, t.noteCount, id],
+        );
+        await _writeStats(id, notes);
+      }
+    });
+    await setSetting(rulesKey, rulesVersion);
+    return deleted;
   }
 
   /// "Clear history" (ADR 0015 decision 9): every session, graded note and statistic, in one transaction, then VACUUM so the deleted

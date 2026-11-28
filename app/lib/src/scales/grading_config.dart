@@ -3,7 +3,7 @@ import 'dart:convert';
 /// Scale grading thresholds (ADR 0011). In v1 they come from a file bundled with the app (assets/config/grading.json; no remote config,
 /// ADR 0012). The defaults here are the same values, so a missing or older file still grades the same way.
 class GradingConfig {
-  const GradingConfig({this.greenCents = 5, this.yellowCents = 15, this.minNoteMs = 80, this.mergeGapMs = 120, this.mergeMaxCentsDiff = 25, this.neighbourCents = 40});
+  const GradingConfig({this.greenCents = 5, this.yellowCents = 15, this.minNoteMs = 80, this.mergeGapMs = 120, this.mergeMaxCentsDiff = 25, this.neighbourCents = 40, this.labelWindowCents = 60, this.minHeardFraction = 0.25, this.badRunFraction = 0.5});
 
   /// |cents| at or below this: 🟢.
   final double greenCents;
@@ -25,6 +25,17 @@ class GradingConfig {
   /// ("sounds closer to B"; Kelechi, 2026-11-28).
   final double neighbourCents;
 
+  /// A played note further than this from its expected note is a wrong note (named, never given cents; the expected note counts as
+  /// missed). It is the engine's own label window (ADR 0018, `kScaleLabelWindow`), so a note inside it really is the expected note.
+  final double labelWindowCents;
+
+  /// A run in which fewer than this share of the expected notes was heard (played or wrong) is not graded: no grade, no save, no tips,
+  /// no heatmap update ("I didn't hear you play").
+  final double minHeardFraction;
+
+  /// A run with more than this share of missed or wrong notes is shown but not saved unless the player says so ("Save this run?").
+  final double badRunFraction;
+
   static const supportedFormat = 1;
 
   factory GradingConfig.fromJsonString(String text) {
@@ -39,8 +50,12 @@ class GradingConfig {
       mergeGapMs: v('merge_gap_ms', d.mergeGapMs),
       mergeMaxCentsDiff: v('merge_max_cents_diff', d.mergeMaxCentsDiff),
       neighbourCents: v('neighbour_cents', d.neighbourCents),
+      labelWindowCents: v('label_window_cents', d.labelWindowCents),
+      minHeardFraction: v('min_heard_fraction', d.minHeardFraction),
+      badRunFraction: v('bad_run_fraction', d.badRunFraction),
     );
-    if (!(c.greenCents > 0 && c.yellowCents >= c.greenCents && c.minNoteMs >= 0 && c.mergeGapMs >= 0 && c.mergeMaxCentsDiff >= 0 && c.neighbourCents >= c.yellowCents)) {
+    if (!(c.greenCents > 0 && c.yellowCents >= c.greenCents && c.minNoteMs >= 0 && c.mergeGapMs >= 0 && c.mergeMaxCentsDiff >= 0 && c.neighbourCents >= c.yellowCents &&
+        c.labelWindowCents >= c.neighbourCents && c.minHeardFraction > 0 && c.minHeardFraction <= 1 && c.badRunFraction > 0 && c.badRunFraction < 1)) {
       throw FormatException('inconsistent grading thresholds: $text');
     }
     return c;

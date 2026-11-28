@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:drift/drift.dart' show Variable;
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:intono_app/src/db/practice_db.dart';
@@ -226,5 +227,47 @@ void main() {
       db.customStatement("INSERT INTO graded_notes (session_id, idx, midi_note, string, finger, grade) VALUES ('nope', 0, 55, 'G', 0, 'green')"),
       throwsA(anything),
     );
+  });
+
+  group('trusted notes only (Kelechi phone test, 2026-11-28)', () {
+    test('a run that was not heard is not stored', () async {
+      final r = gradeScale(g, [n(55, 0, 0), n(57, 0, 0.5)], const GradingConfig()); // 2 of 15 notes
+      expect(r.notHeard, isTrue);
+      expect(await store.saveRun(r, startedAt: t, endedAt: t.add(const Duration(seconds: 8))), isNull);
+      expect(await store.sessions(), isEmpty);
+    });
+
+    test('gradedNotesSince(trustedWithin) returns only notes graded within the window', () async {
+      final id = await save(play(cents));
+      await db.customStatement("UPDATE graded_notes SET cents = 1029 WHERE session_id = ? AND idx = 0", [id]);
+      final all = await store.gradedNotesSince(DateTime.utc(2026, 1, 1));
+      final trusted = await store.gradedNotesSince(DateTime.utc(2026, 1, 1), trustedWithin: 60);
+      expect(all.any((r) => r.$2.cents == 1029), isTrue);
+      expect(trusted.any((r) => r.$2.cents != null && r.$2.cents!.abs() > 60), isFalse);
+      expect(trusted.any((r) => r.$2.cents == null), isFalse);
+    });
+
+    test('the one-time cleanup: bad old sessions go, notes beyond the window become missed, stats are recomputed, it runs once', () async {
+      final badId = await save(play(cents));
+      final goodId = await save(play(cents));
+      // phone test 1 as it was stored: most notes 🔴 with huge cents
+      for (var i = 0; i < 10; i++) {
+        await db.customStatement("UPDATE graded_notes SET grade = 'red', cents = ? WHERE session_id = ? AND idx = ?", [500.0 + i, badId, i]);
+      }
+      // one stray note in an otherwise good run
+      await db.customStatement("UPDATE graded_notes SET grade = 'red', cents = 1029 WHERE session_id = ? AND idx = 0", [goodId]);
+
+      final deleted = await store.applyTrustedNotesRules(const GradingConfig());
+      expect(deleted, 1);
+      expect((await store.sessions()).map((s) => s.id), [goodId]);
+      final notes = await store.gradedNotes(goodId);
+      expect(notes.first.grade, Grade.missed);
+      expect(notes.first.cents, isNull);
+      final s = (await store.sessions()).single;
+      expect(s.totals.missed, greaterThanOrEqualTo(2)); // the stray note and the unplayed one
+      expect(await store.gradedNotesSince(DateTime.utc(2026, 1, 1), trustedWithin: 60).then((r) => r.any((x) => (x.$2.cents ?? 0).abs() > 60)), isFalse);
+      expect(await db.customSelect("SELECT COUNT(*) AS c FROM note_stats WHERE session_id = ?", variables: [Variable.withString(badId)]).getSingle().then((r) => r.read<int>('c')), 0);
+      expect(await store.applyTrustedNotesRules(const GradingConfig()), isNull); // once
+    });
   });
 }

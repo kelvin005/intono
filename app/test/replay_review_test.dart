@@ -48,7 +48,7 @@ void main() {
     closed = 0;
   });
 
-  Future<void> runAndStop(WidgetTester t, {int played = 3}) async {
+  Future<void> runAndStop(WidgetTester t, {int played = 4}) async {
     await t.pumpWidget(screen());
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
@@ -88,7 +88,7 @@ void main() {
     await runAndStop(t);
     await t.tap(find.text('Play the run'));
     await t.pump();
-    expect(audio.calls.last, 'play 1.800-3.700'); // 2.0 - 0.2 to 3.4 + 0.3
+    expect(audio.calls.last, 'play 1.800-4.200'); // 2.0 - 0.2 to 3.9 + 0.3
   });
 
   testWidgets('while it plays, Stop playback stops it', (t) async {
@@ -151,7 +151,9 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
-    engine.queuedNotes.add(n(55, 0, 2.0));
+    for (var i = 0; i < 4; i++) {
+      engine.queuedNotes.add(n(g.notes[i].midi, 0, 2.0 + 0.5 * i));
+    }
     await t.pump(const Duration(milliseconds: 150));
     t.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
     await t.pump();

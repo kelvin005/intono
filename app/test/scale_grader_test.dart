@@ -254,4 +254,77 @@ void main() {
       expect(neighbourHint(g, cfg), isNull);
     });
   });
+
+  group('wrong notes: never graded as the expected note (Kelechi phone test, 2026-11-28)', () {
+    // The engine reports the nearest semitone of the played pitch plus the cents from it; a reading "+1029¢ from G3" is a note ten
+    // semitones up with 29 cents, not a very sharp G3.
+    Note reading(int expectedMidi, double cents, double t0) {
+      final st = (cents / 100).round();
+      return note(expectedMidi + st, cents - 100.0 * st, t0);
+    }
+
+    test('a note further than the label window (60 cents) is wrong: named, no cents, the expected note is missed', () {
+      final r = gradeScale(gMajor, [note(64, 0, 0), ...[for (var i = 1; i < 5; i++) note(gMajor.notes[i].midi, 0, i * 0.6)]], cfg); // E4 where G3 was due
+      final first = r.notes.first;
+      expect(first.isWrong, isTrue);
+      expect(first.wrongName, 'E4');
+      expect(first.grade, Grade.missed);
+      expect(first.played, isNull);
+      expect(first.cents, isNull);
+      expect(r.wrong, 1);
+      expect(r.missed, 11); // the wrong note and the ten unplayed notes
+      expect((r.green, r.yellow, r.red), (4, 0, 0));
+    });
+
+    test('inside the label window it is the expected note, graded by its cents: 55 cents flat is 🔴 at -55', () {
+      final r = gradeScale(gMajor, [note(55, -55, 0), note(57, 0, 0.6), note(59, 0, 1.2), note(60, 0, 1.8)], cfg);
+      expect(r.notes.first.isWrong, isFalse);
+      expect(r.notes.first.cents, closeTo(-55, 1e-9));
+      expect(r.notes.first.grade, Grade.red);
+      expect(r.wrong, 0);
+    });
+
+    test('exactly 60 cents is still the expected note; 61 is a wrong note', () {
+      final at60 = gradeScale(gMajor, [note(55, 60, 0), note(57, 0, 0.6), note(59, 0, 1.2), note(60, 0, 1.8)], cfg);
+      expect(at60.notes.first.isWrong, isFalse);
+      final at61 = gradeScale(gMajor, [note(55, 61, 0), note(57, 0, 0.6), note(59, 0, 1.2), note(60, 0, 1.8)], cfg);
+      expect(at61.notes.first.isWrong, isTrue);
+    });
+
+    test("phone test 1 replayed: no note carries more than 60 cents, wrong notes are named, the run is a bad run", () {
+      // G major, 1 octave; the readings of Kelechi's slow-video run (cents from the expected note).
+      const readings = [1029.0, 511.0, 287.0, 262.0, 18.0, 119.0, 35.0, -507.0, -50.0, 264.0, -17.0];
+      final played = [for (var i = 0; i < readings.length; i++) reading(gMajor.notes[i].midi, readings[i], i * 0.6)];
+      final r = gradeScale(gMajor, played, cfg);
+      for (final g in r.notes) {
+        if (g.cents != null) expect(g.cents!.abs(), lessThanOrEqualTo(60), reason: 'note ${g.index}');
+        expect(g.grade == Grade.missed || g.played != null, isTrue);
+      }
+      expect(r.wrong, greaterThanOrEqualTo(4));
+      expect(r.notes.where((g) => g.isWrong).every((g) => g.wrongName!.isNotEmpty), isTrue);
+      expect(r.notes.first.isWrong, isTrue);
+      expect(r.notes.first.wrongName, 'F4'); // 55 + 10 semitones, 29 cents
+      expect(r.badRun, isTrue); // more than half of the 15 notes missed or wrong
+      expect(r.notHeard, isFalse);
+    });
+
+    test('heard: fewer than 25 % of the expected notes is not heard (15 notes: 3 is not enough, 4 is)', () {
+      List<Note> first(int k) => [for (var i = 0; i < k; i++) note(gMajor.notes[i].midi, 0, i * 0.6)];
+      expect(gradeScale(gMajor, const [], cfg).notHeard, isTrue);
+      expect(gradeScale(gMajor, first(3), cfg).notHeard, isTrue);
+      expect(gradeScale(gMajor, first(4), cfg).notHeard, isFalse);
+    });
+
+    test('a wrong note counts as heard (something was played), not as silence', () {
+      final r = gradeScale(gMajor, [for (var i = 0; i < 4; i++) note(73, 0, i * 0.6)], cfg); // C#5 four times
+      expect(r.heard, 4);
+      expect(r.notHeard, isFalse);
+    });
+
+    test('bad run: more than half of the expected notes missed or wrong (15 notes: 8 is, 7 is not)', () {
+      List<Note> first(int k) => [for (var i = 0; i < k; i++) note(gMajor.notes[i].midi, 0, i * 0.6)];
+      expect(gradeScale(gMajor, first(7), cfg).badRun, isTrue); // 8 missed
+      expect(gradeScale(gMajor, first(8), cfg).badRun, isFalse); // 7 missed
+    });
+  });
 }

@@ -6,5 +6,8 @@
   "min_note_ms": 80,
   "merge_gap_ms": 120,
   "merge_max_cents_diff": 25,
-  "neighbour_cents": 40
+  "neighbour_cents": 40,
+  "label_window_cents": 60,
+  "min_heard_fraction": 0.25,
+  "bad_run_fraction": 0.5
 }

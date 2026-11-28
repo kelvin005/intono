@@ -49,3 +49,10 @@ ADR 0011 (answer 1) and ADR 0012 rule out remote config in v1, so the thresholds
 2. Exercise choice: is "the run's own scale if it uses that finger, else the scale with the most notes on it" right, or should it
    always suggest a 1-octave scale?
 3. Wording: is the English of the five templates right for students?
+
+## Status note 2026-11-28: only trustworthy notes
+
+Tips and the heatmap use only notes graded within the label window (`label_window_cents`, 60): 🟢/🟡/🔴 by cents. Missed, wrong, extra
+and out-of-window notes never make a "habit" (the "often 27¢ sharp" tip of phone test 1 came from a +1029¢ note stored as a 🔴).
+The missed-notes tip counts only notes not heard at all; a wrong note is not "not heard". Runs that were not heard, or that the player
+did not save, are not in the history at all (ADR 0011 status note of the same date). Thresholds unchanged (4 notes, 10¢, 60%, 2, 2).

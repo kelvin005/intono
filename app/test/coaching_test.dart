@@ -172,4 +172,20 @@ void main() {
       expect(tips([], runWith({3: -55}), c: const CoachingConfig(maxTips: 1)), ['Your C4 was very flat, almost a B.']);
     });
   });
+
+  group('only trustworthy notes feed the tips (Kelechi phone test, 2026-11-28)', () {
+    test('notes beyond the label window never make a habit, however many there are', () {
+      final history = cell('D', 0, null, [1029, 511, 287, 262, 119, 264, 507]); // stored before wrong notes existed
+      final tips = coachingTips(history: history, run: run(), library: lib, grading: grading, config: cfg);
+      expect(tips.where((t) => t.contains('often')), isEmpty);
+    });
+
+    test('a wrong note is not "not heard": the missed-notes tip counts only the really missed ones', () {
+      final played = [for (var i = 0; i < 4; i++) Note(tStart: i * 0.6, tEnd: i * 0.6 + 0.4, midiNote: gMajor.notes[i].midi, meanCents: 0, stdCents: 2, vibratoRateHz: 0, vibratoWidthCents: 0, meanConfidence: 0.99, frameCount: 75)];
+      final r = gradeScale(gMajor, [...played, Note(tStart: 2.4, tEnd: 2.8, midiNote: 73, meanCents: 0, stdCents: 2, vibratoRateHz: 0, vibratoWidthCents: 0, meanConfidence: 0.99, frameCount: 75)], grading);
+      expect(r.wrong, 1);
+      final tips = coachingTips(history: [for (final n in storedNotesOf(r)) ('s', n)], run: r, library: lib, grading: grading, config: cfg);
+      expect(tips.any((t) => t.contains('10 notes were not heard')), isTrue); // 15 - 4 played - 1 wrong
+    });
+  });
 }

@@ -28,6 +28,9 @@ Note n(int midi, double cents, double t0) => Note(
     meanConfidence: 0.99,
     frameCount: 75);
 
+/// Four in-tune notes: enough of the 15 expected notes (27 %) to count as heard (GradingConfig.minHeardFraction, 25 %).
+List<Note> heardEnough([int from = 0]) => [for (var i = from; i < 4; i++) n(g.notes[i].midi, 0, i * 0.5)];
+
 Widget host(Widget w) => Directionality(textDirection: TextDirection.ltr, child: w);
 
 Color glance(WidgetTester t) => t.widget<ColoredBox>(find.byKey(const Key('glance'))).color;
@@ -59,15 +62,14 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
-    engine.queuedNotes.add(n(55, 1, 0));
-    engine.queuedNotes.add(n(57, 2, 0.5));
+    engine.queuedNotes.addAll([n(55, 1, 0), n(57, 2, 0.5), ...heardEnough(2)]);
     await t.pump(const Duration(milliseconds: 150));
     await t.tap(find.text('Stop'));
     await t.pump();
     expect(saved.length, 1);
     final (r, start, end) = saved.single;
     expect(r.scale.id, 'g_major_1oct');
-    expect(r.notes.where((x) => x.played != null).length, 2);
+    expect(r.notes.where((x) => x.played != null).length, 4);
     expect(end.isBefore(start), isFalse);
   });
 
@@ -88,7 +90,7 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
-    engine.queuedNotes.add(n(55, 1, 0));
+    engine.queuedNotes.addAll(heardEnough());
     await t.pump(const Duration(milliseconds: 150));
     await t.tap(find.text('Stop'));
     await t.pump();
@@ -110,7 +112,7 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
-    engine.queuedNotes.add(n(55, 1, 0));
+    engine.queuedNotes.addAll(heardEnough());
     await t.pump(const Duration(milliseconds: 150));
     await t.tap(find.text('Stop'));
     await t.pump();
@@ -130,7 +132,7 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
-    engine.queuedNotes.add(n(55, 1, 0));
+    engine.queuedNotes.addAll(heardEnough());
     await t.pump(const Duration(milliseconds: 150));
     await t.tap(find.text('Stop'));
     await t.pump();
@@ -209,13 +211,13 @@ void main() {
     await t.tap(find.text('G major, 1 octave'));
     await t.pump();
     await t.pump();
-    engine.queuedNotes.addAll([n(55, 0, 0), n(57, 0, 0.5)]);
+    engine.queuedNotes.addAll(heardEnough());
     await t.pump(const Duration(milliseconds: 150));
     await t.tap(find.text('Stop'));
     await t.pump();
     await t.pump();
-    expect(find.text('🟢 2   🟡 0   🔴 13'), findsOneWidget);
-    expect(find.text('13 %'), findsOneWidget);
+    expect(find.text('🟢 4   🟡 0   🔴 11'), findsOneWidget);
+    expect(find.text('27 %'), findsOneWidget);
   });
 
   testWidgets('Play again starts the same scale with a fresh run', (t) async {
@@ -251,7 +253,7 @@ void main() {
       await t.tap(find.text('G major, 1 octave'));
       await t.pump();
       await t.pump();
-      engine.queuedNotes.addAll(notes);
+      engine.queuedNotes.addAll([...notes, n(59, 0, 1.0), n(60, 0, 1.5)]); // four notes: enough to count as heard
       await t.pump(const Duration(milliseconds: 150));
       await t.tap(find.text('Stop'));
       await t.pump();
@@ -273,6 +275,75 @@ void main() {
       await playAndStop(t, [n(55, 30, 0), n(57, 2, 0.5)]);
       expect(find.textContaining('closer to'), findsNothing);
       expect(find.textContaining('almost'), findsNothing);
+    });
+  });
+
+  group('what a run is worth (Kelechi phone test, 2026-11-28)', () {
+    Future<void> playAndStop(WidgetTester t, List<Note> notes, {Future<List<String>> Function(ScaleResult)? coach}) async {
+      await t.pumpWidget(host(ScaleScreen(
+        audio: audio,
+        engineFactory: (_) => engine,
+        library: lib,
+        config: const GradingConfig(),
+        onClose: () {},
+        onRunFinished: (r, s, e) async => saved.add((r, s, e)),
+        coach: coach,
+      )));
+      await t.tap(find.text('G major, 1 octave'));
+      await t.pump();
+      await t.pump();
+      engine.queuedNotes.addAll(notes);
+      await t.pump(const Duration(milliseconds: 150));
+      await t.tap(find.text('Stop'));
+      await t.pump();
+      await t.pump();
+    }
+
+    testWidgets("silence: \"I didn't hear you play\", no grade, nothing saved, no tips", (t) async {
+      var coached = 0;
+      await playAndStop(t, const [], coach: (r) async {
+        coached++;
+        return ['a tip'];
+      });
+      expect(find.textContaining("I didn't hear you play"), findsOneWidget);
+      expect(find.textContaining('%'), findsNothing);
+      expect(find.text('a tip'), findsNothing);
+      expect(saved, isEmpty);
+      expect(coached, 0);
+      expect(find.text('Play again'), findsOneWidget);
+    });
+
+    testWidgets('a wrong note is named with its expected note, with no cents', (t) async {
+      await playAndStop(t, [n(64, 0, 0), n(57, 0, 0.6), n(59, 0, 1.2), n(60, 0, 1.8), n(62, 0, 2.4)]);
+      expect(find.textContaining('played E4, expected G3'), findsOneWidget);
+      expect(find.textContaining('+0¢'), findsWidgets);
+      expect(find.textContaining('1029'), findsNothing);
+      expect(saved.length, 1);
+    });
+
+    testWidgets('more than half missed or wrong: results are shown, "Save this run?" is asked, nothing is saved until Save', (t) async {
+      await playAndStop(t, [for (var i = 0; i < 10; i++) n(73, 0, i * 0.6)]); // C#5, ten times
+      expect(find.textContaining('Save this run?'), findsOneWidget);
+      expect(find.text("Don't save"), findsOneWidget);
+      expect(saved, isEmpty);
+      await t.tap(find.text('Save'));
+      await t.pump();
+      expect(saved.length, 1);
+      expect(find.textContaining('Save this run?'), findsNothing);
+    });
+
+    testWidgets('"Don\'t save" keeps the run out of the history and out of the tips', (t) async {
+      var coached = 0;
+      await playAndStop(t, [for (var i = 0; i < 10; i++) n(73, 0, i * 0.6)], coach: (r) async {
+        coached++;
+        return ['a tip'];
+      });
+      await t.tap(find.text("Don't save"));
+      await t.pump();
+      await t.pump();
+      expect(saved, isEmpty);
+      expect(coached, 0);
+      expect(find.textContaining('Not saved'), findsOneWidget);
     });
   });
 }

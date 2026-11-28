@@ -101,3 +101,22 @@ templated tips, which come after item 5. No outbox or sync tables (ADR 0012).
 
 - No change to `intono.h`, the DSP, a gate or a threshold in item 1. Item 3 will change the DSP and the C API by its own ADR.
 - New files only: the generator, the asset, the Dart model and its tests, a CI check.
+
+## Status note 2026-11-28: what a run is worth (phone test findings, Kelechi)
+
+Phone test 1 (G major, slow video) showed a +1029¢ "G3", +511¢ "A3" and so on, and test 2 (silence) was graded 0% and saved. Rules
+now in force (thresholds in `grading.json`, nothing remote, ADR 0012); Kelechi pre-approved this batch and its ADR notes:
+
+1. **Wrong notes.** A played note further than `label_window_cents` (60, the engine's own label window of ADR 0018) from the note
+   due is a **wrong note**: shown by its own name ("played E4, expected G3"), never given cents, and the expected note counts as
+   **missed**. The aligner's free match is now the same 60 cents (was 50), so a note 55¢ flat is the expected note, 🔴 at -55.
+2. **Not heard.** Fewer than `min_heard_fraction` (25%) of the expected notes heard (played or wrong): **no grade, no save, no tips,
+   no heatmap update**: "I didn't hear you play. Check the microphone, come closer, or play louder."
+3. **Bad runs.** More than `bad_run_fraction` (50%) of the expected notes missed or wrong: the results are shown but the run is not
+   saved unless the player taps **Save** on "Save this run?" (the default is "Don't save"; leaving the screen is "No").
+4. **Only saved runs feed tips and the heatmap**, and of those only notes graded within the window (ADR 0016 status note).
+5. **One-time cleanup** of history written before these rules (`PracticeStore.applyTrustedNotesRules`, settings key `grading_rules`):
+   stored notes beyond the window become missed without cents, sessions with more than half of their notes missed are deleted
+   (they would not have been saved now), totals and `note_stats` are recomputed from `graded_notes`. It runs once per install.
+
+No change to `intono.h`, the DSP or the database schema.
