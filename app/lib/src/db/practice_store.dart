@@ -149,6 +149,34 @@ class PracticeStore {
     ];
   }
 
+  /// The graded notes of every session that started at or after [since] (UTC), as (session id, note): the heatmap's input
+  /// (architecture doc, "Coaching": the last 30 days). From `graded_notes`, so it follows a threshold change without a cache rebuild.
+  Future<List<(String, StoredNote)>> gradedNotesSince(DateTime since, {String instrument = 'violin'}) async {
+    final rows = await db.customSelect(
+      'SELECT g.session_id, g.idx, g.midi_note, g.string, g.finger, g.placement, g.grade, g.cents, g.t_start, g.t_end '
+      'FROM graded_notes g JOIN sessions s ON s.id = g.session_id WHERE s.started_at >= ? AND s.instrument = ? '
+      'ORDER BY s.started_at, g.idx',
+      variables: [Variable.withInt(since.toUtc().millisecondsSinceEpoch), Variable.withString(instrument)],
+    ).get();
+    return [
+      for (final r in rows)
+        (
+          r.read<String>('session_id'),
+          StoredNote(
+            idx: r.read<int>('idx'),
+            midiNote: r.read<int>('midi_note'),
+            string: r.read<String>('string'),
+            finger: r.read<int>('finger'),
+            placement: r.readNullable<String>('placement'),
+            grade: Grade.values.byName(r.read<String>('grade')),
+            cents: r.readNullable<double>('cents'),
+            tStart: r.readNullable<double>('t_start'),
+            tEnd: r.readNullable<double>('t_end'),
+          )
+        )
+    ];
+  }
+
   /// Every session, newest first.
   Future<List<SessionSummary>> sessions() async {
     final rows = await db.customSelect(
