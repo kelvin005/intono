@@ -140,8 +140,10 @@ void main() {
     await t.pump();
     expect(audio.calls, containsAllInOrder(['freeze', 'release', 'stop']));
     expect(audio.armed, isFalse);
-    expect(find.text('Play the run'), findsNothing, reason: 'nothing is left to play');
+    // a hidden app draws no frames: back in the foreground, the review has nothing left to play
     t.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await t.pump();
+    expect(find.text('Play the run'), findsNothing, reason: 'nothing is left to play');
   });
 
   testWidgets('the app going to the background during a run grades it and keeps nothing to replay', (t) async {
