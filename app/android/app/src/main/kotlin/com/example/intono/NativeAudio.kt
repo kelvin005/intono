@@ -63,6 +63,30 @@ class NativeAudio {
     @Synchronized
     fun setDrone(enabled: Boolean, midiNote: Int = 57, gain: Float = 0.3f): Boolean = handle != 0L && nativeSetDrone(handle, enabled, midiNote, gain)
 
+    // Replay (ADR 0013): the audio stays in the native RAM ring. Kotlin never sees a sample.
+
+    /** Keeps the last [seconds] of input in RAM for this run (releases a previous run first). */
+    @Synchronized
+    fun replayArm(seconds: Double): Boolean = handle != 0L && nativeReplayArm(handle, seconds)
+
+    /** The run is over: the microphone no longer reaches the engine or the ring; the session stays open for playback. */
+    @Synchronized
+    fun replayFreeze() { if (handle != 0L) nativeReplayFreeze(handle) }
+
+    /** Plays the kept audio between two engine times (seconds). */
+    @Synchronized
+    fun replayPlay(from: Double, to: Double): Boolean = handle != 0L && nativeReplayPlay(handle, from, to)
+
+    @Synchronized
+    fun replayStop() { if (handle != 0L) nativeReplayStop(handle) }
+
+    /** Zeroes and frees the ring. */
+    @Synchronized
+    fun replayRelease() { if (handle != 0L) nativeReplayRelease(handle) }
+
+    @Synchronized
+    fun replayPlaying(): Boolean = handle != 0L && nativeReplayPlaying(handle)
+
     /** Granted modes, sample rate, burst and buffer sizes, xruns: text, timing and settings only, never audio. */
     @Synchronized
     fun info(): String = if (handle == 0L) "stopped" else nativeInfo(handle)
@@ -80,6 +104,12 @@ class NativeAudio {
     private external fun nativeHealthy(handle: Long): Boolean
     private external fun nativeEnginePointer(handle: Long): Long
     private external fun nativeSetDrone(handle: Long, enabled: Boolean, midiNote: Int, gain: Float): Boolean
+    private external fun nativeReplayArm(handle: Long, seconds: Double): Boolean
+    private external fun nativeReplayFreeze(handle: Long)
+    private external fun nativeReplayPlay(handle: Long, from: Double, to: Double): Boolean
+    private external fun nativeReplayStop(handle: Long)
+    private external fun nativeReplayRelease(handle: Long)
+    private external fun nativeReplayPlaying(handle: Long): Boolean
     private external fun nativeInfo(handle: Long): String
     private external fun nativeLastError(): String
     private external fun nativeSmoke(): Boolean

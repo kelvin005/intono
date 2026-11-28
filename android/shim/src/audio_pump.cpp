@@ -111,6 +111,15 @@ int64_t AudioPump::now() const {
 
 void AudioPump::on_input(const float* in, int n, InputInfo info) {
   if (!in || n <= 0) return;
+  if (replay_.frozen()) {   // review (ADR 0013): the microphone reaches neither the engine nor the ring
+    was_paused_ = true;
+    return;
+  }
+  if (was_paused_) {   // the paused stretch is not a gap: timing and position tracking start afresh
+    was_paused_ = false;
+    prev_n_ = 0;
+    pos_seen_ = pos_valid_ = false;
+  }
   const int64_t t0 = now();
   if (reset_in_.exchange(false, std::memory_order_acq_rel)) {
     chunk_.clear();
@@ -159,6 +168,7 @@ void AudioPump::on_input(const float* in, int n, InputInfo info) {
       done += m;
     }
   }
+  replay_.on_input(in, n);   // counts every frame (the engine's clock); keeps it only while armed
   callback_.add(now() - t0);
   in_callbacks_.store(in_callbacks_.load(std::memory_order_relaxed) + 1, std::memory_order_relaxed);
   in_frames_.store(in_frames_.load(std::memory_order_relaxed) + static_cast<uint64_t>(n), std::memory_order_relaxed);
@@ -218,7 +228,9 @@ void AudioPump::on_output(float* out, int n) {
     out_frames_.store(0, std::memory_order_relaxed);
     out_xruns_.store(0, std::memory_order_relaxed);
   }
-  if (drone_on_.load(std::memory_order_acquire) && ops_.drone_render) {
+  if (replay_.on_output(out, n)) {
+    // a replay slice (ADR 0013) instead of the drone
+  } else if (drone_on_.load(std::memory_order_acquire) && ops_.drone_render) {
     const int64_t a = now();
     ops_.drone_render(ops_.ctx, out, n);
     drone_.add(now() - a);

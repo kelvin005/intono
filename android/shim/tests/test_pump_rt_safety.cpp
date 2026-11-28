@@ -80,6 +80,44 @@ TEST(PumpRtSafety, InputAndOutputCallbacksNeitherAllocateNorLock) {
   intono_destroy(e);
 }
 
+// ADR 0013: the same with the replay ring armed (recording), then frozen and playing a slice on the output thread.
+TEST(PumpRtSafety, ReplayRecordingAndPlaybackNeitherAllocateNorLock) {
+  intono_config c{};
+  c.sample_rate = 48000;
+  c.window_size = 1024;
+  c.hop_size = 256;
+  c.a4_hz = 440;
+  c.min_hz = 180;
+  c.max_hz = 3200;
+  intono_engine* e = intono_create(&c);
+  ASSERT_NE(e, nullptr);
+  intono_shim::PumpConfig pc;
+  intono_shim::AudioPump p(intono_shim::engine_ops(e), pc);
+  ASSERT_TRUE(p.replay().arm(48000, 60.0));   // UI thread: allocates here, before the audio callbacks
+  std::vector<float> in(480), out(480);
+  for (size_t i = 0; i < in.size(); ++i) in[i] = static_cast<float>(0.3 * std::sin(0.05 * static_cast<double>(i)));
+  for (int k = 0; k < 50; ++k) p.on_input(in.data(), 480);   // warm-up, unarmed instrumentation
+  {
+    Armed a;
+    for (int k = 0; k < 2000; ++k) p.on_input(in.data(), 480);   // recording, and wrapping is not reached (20 s of 60)
+    EXPECT_EQ(g_allocs.load(), 0);
+    EXPECT_EQ(g_locks.load(), 0);
+  }
+  p.replay().freeze();
+  ASSERT_TRUE(p.replay().play(p.replay().first_frame(), p.replay().end_frame()));
+  {
+    Armed a;
+    for (int k = 0; k < 500; ++k) {
+      p.on_input(in.data(), 480);    // paused: returns at once
+      p.on_output(out.data(), 480);  // playback
+    }
+    EXPECT_EQ(g_allocs.load(), 0);
+    EXPECT_EQ(g_locks.load(), 0);
+  }
+  p.replay().release();
+  intono_destroy(e);
+}
+
 int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

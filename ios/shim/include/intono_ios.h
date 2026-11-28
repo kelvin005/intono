@@ -23,6 +23,15 @@ int intono_ios_healthy(const intono_ios_session* s);
 intptr_t intono_ios_engine(const intono_ios_session* s);
 // Drone on (the source node renders intono_drone_render) or off (silence).
 int intono_ios_set_drone(intono_ios_session* s, int on, int midi_note, float gain);
+// Replay (ADR 0013): the last `seconds` of input in RAM (arm, at a run's start; releases a previous run), frozen at the run's end (the
+// microphone then reaches neither the engine nor the ring), played between two engine times in seconds, and released (zeroed, freed).
+// Never written to disk. 1 = success / playing.
+int intono_ios_replay_arm(intono_ios_session* s, double seconds);
+void intono_ios_replay_freeze(intono_ios_session* s);
+int intono_ios_replay_play(intono_ios_session* s, double from_s, double to_s);
+void intono_ios_replay_stop(intono_ios_session* s);
+void intono_ios_replay_release(intono_ios_session* s);
+int intono_ios_replay_playing(const intono_ios_session* s);
 // Text into out (always terminated, truncated if needed); returns the full length.
 int intono_ios_info(intono_ios_session* s, char* out, int cap);
 int intono_ios_soak_status(intono_ios_session* s, char* out, int cap);
