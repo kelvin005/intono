@@ -288,9 +288,10 @@ TEST(NoteTracker, ARealNoteOf80To90MsInsideAFastRunSurvivesTheGlitchRule) {
   EXPECT_EQ(bad, 0) << bad << " of " << total;
 }
 
-// Known limit, measured 2026-11-22 and recorded in ADR 0004 (Amendment 4): with steps -200,-300,-150,-200 and vibrato of
-// +-25 cents, 4 of 36 cases lose the 80 to 90 ms note (a 150-cent neighbour, a note below the 100 ms gate). Disabled so
-// that the suite stays green; run with --gtest_also_run_disabled_tests. It has to pass before Phase 3 closes.
+// Known limit of FREE mode, measured 2026-11-22 (ADR 0004, Amendment 4): with steps -200,-300,-150,-200 and vibrato of
+// +-25 cents, 4 of 36 cases lose the 80 to 90 ms note (a 150-cent neighbour, a note below the 100 ms gate). Kept disabled as
+// the record of that limit (ADR 0004, Amendment 5, Kelechi 2026-11-28): scale mode meets the requirement
+// (ShortNoteNextToA150CentStepWithVibratoInScaleMode, 36/36). Run with --gtest_also_run_disabled_tests.
 TEST(NoteTracker, DISABLED_ShortNoteNextToA150CentStepWithVibratoKnownLimit) {
   int total = 0;
   const int bad = mid_note_80_to_90({{-200, -300, -150, -200}}, &total);
